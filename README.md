@@ -1,0 +1,132 @@
+# Async Transaction Infrastructure
+
+Terraform infrastructure for the Async Transaction Processing portfolio project.
+
+This repository owns AWS resources only. Application source code is built in independent repositories and supplied as immutable ZIP artifacts.
+
+## Current scope
+
+The current stage defines:
+
+- encrypted and versioned S3 remote state;
+- native S3 state locking;
+- encrypted S3 deployment artifacts with lifecycle cleanup;
+- GitHub Actions authentication through the existing AWS OIDC provider;
+- separate roles for Terraform deployment and artifact publication;
+- optional USD 5 monthly AWS Budget with email alerts;
+- DynamoDB table with TTL and Streams;
+- Transaction API Lambda using managed `dotnet10` on `arm64`;
+- API Gateway HTTP API;
+- CloudWatch log groups and access logs;
+- least-privilege runtime permissions for the Transaction API.
+
+No AWS resource is created by cloning or validating this repository. Creation requires an explicit `terraform apply`.
+
+## Repository structure
+
+```text
+bootstrap/
+  Creates remote state, artifact storage, OIDC roles and the cost budget.
+stacks/core/
+  Creates the main solution, beginning with the Transactions API.
+stacks/external-simulator/
+  Reserved for the independently deployed external processor simulator.
+modules/
+  Receives reusable components only after actual repetition exists.
+policies/
+  Reserved for policy checks introduced in the security stage.
+```
+
+## Region and cost posture
+
+The temporary development environment uses `us-east-1`. Serverless, on-demand resources were selected to avoid fixed compute cost:
+
+- API Gateway HTTP API;
+- Lambda;
+- DynamoDB on-demand;
+- short CloudWatch Logs retention;
+- no VPC, NAT Gateway, EKS or provisioned capacity.
+
+The infrastructure is designed to be destroyed after the portfolio demonstration.
+
+## Prerequisites
+
+- Terraform 1.14 or newer;
+- AWS CLI authenticated to the intended account;
+- permission to manage S3, IAM roles, AWS Budgets and the serverless services in scope;
+- the GitHub OIDC provider `token.actions.githubusercontent.com` already registered in the AWS account.
+
+No access key or AWS account identifier is stored in this repository.
+
+## 1. Validate the bootstrap
+
+```bash
+terraform -chdir=bootstrap init
+terraform -chdir=bootstrap fmt -check
+terraform -chdir=bootstrap validate
+terraform -chdir=bootstrap plan
+```
+
+Before the first apply, copy `bootstrap/terraform.tfvars.example` to a non-versioned `terraform.tfvars` and set `budget_alert_email`. Leaving the value null intentionally skips the budget and its alerts.
+
+## 2. Apply the bootstrap
+
+Run the bootstrap only after its plan has been reviewed:
+
+```bash
+terraform -chdir=bootstrap apply
+```
+
+The outputs provide the state bucket, artifact bucket and GitHub Actions role ARNs.
+
+## 3. Configure the core backend
+
+After the bootstrap exists, copy the example and replace the bucket name with the `terraform_state_bucket` output:
+
+```bash
+cp stacks/core/backend.hcl.example stacks/core/backend.hcl
+terraform -chdir=stacks/core init -backend-config=backend.hcl
+```
+
+The ignored `backend.hcl` contains no credentials. Authentication uses the AWS credential chain locally and OIDC in GitHub Actions.
+
+## 4. Supply the application artifact
+
+The Transaction API repository will publish an immutable ZIP with this key format:
+
+```text
+async-transaction-api/<git-sha>/async-transaction-api.zip
+```
+
+Copy `stacks/core/terraform.tfvars.example` to `stacks/core/terraform.tfvars` and replace the artifact key and Base64 SHA-256 before any apply. The defaults in `variables.tf` are deliberate non-deployable planning placeholders.
+
+## 5. Plan the core stack
+
+```bash
+terraform -chdir=stacks/core fmt -check
+terraform -chdir=stacks/core validate
+terraform -chdir=stacks/core plan -out=core.tfplan
+```
+
+Review the plan before applying. The first core apply belongs to the next project stage.
+
+## Security boundaries
+
+- Application workflows from `main` may publish artifacts only.
+- Infrastructure workflows may assume the Terraform role from `main`, pull requests or the protected `dev` environment.
+- The Terraform role uses AWS `PowerUserAccess` plus IAM permissions limited to project-prefixed roles.
+- Runtime access is separate: the Transaction API Lambda can write logs and read/create records only in its DynamoDB table.
+- OIDC removes the need for permanent AWS keys in GitHub.
+
+The deployment role will receive a further least-privilege review in the security stage.
+
+## Destruction
+
+The product stack must be destroyed before the bootstrap because its state and artifacts depend on bootstrap buckets:
+
+```bash
+terraform -chdir=stacks/core destroy
+terraform -chdir=bootstrap destroy
+```
+
+The final project checklist requires a separate AWS inventory and cost check after destruction.

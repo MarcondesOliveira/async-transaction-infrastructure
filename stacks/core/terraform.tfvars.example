@@ -1,0 +1,9 @@
+aws_region              = "us-east-1"
+environment             = "dev"
+lambda_memory_mb        = 512
+lambda_timeout_seconds  = 30
+log_retention_days      = 7
+
+# Replace these values with the immutable ZIP published by async-transaction-api.
+lambda_artifact_key     = "async-transaction-api/<git-sha>/async-transaction-api.zip"
+lambda_source_code_hash = "replace-with-base64-sha256"

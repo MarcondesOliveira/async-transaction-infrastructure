@@ -1,0 +1,6 @@
+aws_region         = "us-east-1"
+environment        = "dev"
+monthly_budget_usd = 5
+
+# Set this before the first apply. Leaving it null intentionally skips the budget.
+budget_alert_email = null
