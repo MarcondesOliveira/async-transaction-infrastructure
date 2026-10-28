@@ -31,6 +31,7 @@ data "aws_iam_policy_document" "transaction_api" {
     actions = [
       "dynamodb:DescribeTable",
       "dynamodb:GetItem",
+      "dynamodb:PutItem",
       "dynamodb:TransactWriteItems"
     ]
     resources = [aws_dynamodb_table.transactions.arn]

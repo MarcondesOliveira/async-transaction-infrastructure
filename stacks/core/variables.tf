@@ -28,8 +28,8 @@ variable "lambda_source_code_hash" {
   default     = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 
   validation {
-    condition     = can(base64decode(var.lambda_source_code_hash))
-    error_message = "lambda_source_code_hash must be a valid base64 value."
+    condition     = can(regex("^[A-Za-z0-9+/]{43}=$", var.lambda_source_code_hash))
+    error_message = "lambda_source_code_hash must be a Base64-encoded SHA-256 value."
   }
 }
 
