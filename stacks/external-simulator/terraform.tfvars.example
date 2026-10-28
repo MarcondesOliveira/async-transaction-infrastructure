@@ -1,0 +1,10 @@
+aws_region                = "us-east-1"
+environment               = "dev"
+operation_retention_hours = 24
+processing_delay_seconds  = 2
+worker_trigger_enabled    = true
+log_retention_days        = 7
+
+# Both Lambdas use the same immutable package built from the simulator repository.
+simulator_artifact_key     = "external-transaction-processor-simulator/<git-sha>/external-transaction-processor-simulator.zip"
+simulator_source_code_hash = "replace-with-base64-sha256"

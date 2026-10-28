@@ -23,6 +23,7 @@ The current stage defines:
 - EventBridge Pipes routing only `INSERT + PENDING` transaction records;
 - Request Handler Lambda with partial SQS batch failure reporting;
 - least-privilege runtime roles for the Request Handler and EventBridge Pipes.
+- independent external simulator stack with an HTTP API, two Lambdas, its own DynamoDB Stream table and a callback failure destination.
 
 No AWS resource is created by cloning or validating this repository. Creation requires an explicit `terraform apply`.
 
@@ -34,7 +35,7 @@ bootstrap/
 stacks/core/
   Creates the Transaction API and the asynchronous request pipeline.
 stacks/external-simulator/
-  Reserved for the independently deployed external processor simulator.
+  Hosts the independent simulator with a separate Terraform state.
 modules/
   Receives reusable components only after actual repetition exists.
 policies/
@@ -132,6 +133,7 @@ Review the plan before applying. The first core apply belongs to the next projec
 - Runtime access is separate: the Transaction API Lambda can write logs and read/create records only in its DynamoDB table.
 - The Request Handler can consume only Processing Requests and conditionally update only the project table.
 - EventBridge Pipes can read only the transaction Stream and send only to Processing Requests.
+- The simulator API can read/create only simulator operations; its worker can read only that Stream, write its own logs and send failure metadata to its own queue.
 - OIDC removes the need for permanent AWS keys in GitHub.
 
 The deployment role will receive a further least-privilege review in the security stage.
@@ -141,8 +143,11 @@ The deployment role will receive a further least-privilege review in the securit
 The product stack must be destroyed before the bootstrap because its state and artifacts depend on bootstrap buckets:
 
 ```bash
+terraform -chdir=stacks/external-simulator destroy
 terraform -chdir=stacks/core destroy
 terraform -chdir=bootstrap destroy
 ```
 
 The final project checklist requires a separate AWS inventory and cost check after destruction.
+
+See [the simulator stack guide](stacks/external-simulator/README.md) for backend setup, artifact configuration, review steps and manual tests. Simulator deployment and core endpoint wiring are separate reviewed changes.
