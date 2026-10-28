@@ -19,6 +19,10 @@ The current stage defines:
 - API Gateway HTTP API;
 - CloudWatch log groups and access logs;
 - least-privilege runtime permissions for the Transaction API.
+- encrypted Processing Requests and Failed Requests SQS queues with redrive;
+- EventBridge Pipes routing only `INSERT + PENDING` transaction records;
+- Request Handler Lambda with partial SQS batch failure reporting;
+- least-privilege runtime roles for the Request Handler and EventBridge Pipes.
 
 No AWS resource is created by cloning or validating this repository. Creation requires an explicit `terraform apply`.
 
@@ -28,7 +32,7 @@ No AWS resource is created by cloning or validating this repository. Creation re
 bootstrap/
   Creates remote state, artifact storage, OIDC roles and the cost budget.
 stacks/core/
-  Creates the main solution, beginning with the Transactions API.
+  Creates the Transaction API and the asynchronous request pipeline.
 stacks/external-simulator/
   Reserved for the independently deployed external processor simulator.
 modules/
@@ -90,7 +94,7 @@ terraform -chdir=stacks/core init -backend-config=backend.hcl
 
 The ignored `backend.hcl` contains no credentials. Authentication uses the AWS credential chain locally and OIDC in GitHub Actions.
 
-## 4. Supply the application artifact
+## 4. Supply the application artifacts
 
 The Transaction API repository will publish an immutable ZIP with this key format:
 
@@ -98,7 +102,17 @@ The Transaction API repository will publish an immutable ZIP with this key forma
 async-transaction-api/<git-sha>/async-transaction-api.zip
 ```
 
-Copy `stacks/core/terraform.tfvars.example` to `stacks/core/terraform.tfvars` and replace the artifact key and Base64 SHA-256 before any apply. The defaults in `variables.tf` are deliberate non-deployable planning placeholders.
+The Request Handler uses the equivalent immutable key:
+
+```text
+async-transaction-request-handler/<git-sha>/async-transaction-request-handler.zip
+```
+
+Copy `stacks/core/terraform.tfvars.example` to `stacks/core/terraform.tfvars` and replace both artifact keys and Base64 SHA-256 values before any apply. The defaults in `variables.tf` are deliberate non-deployable planning placeholders.
+
+Until the simulator and callback are deployed, the Request Handler uses reserved
+`.invalid` HTTPS domains. This intentionally produces transient failures so the
+SQS retry and DLQ behavior can be demonstrated without contacting a real system.
 
 ## 5. Plan the core stack
 
@@ -116,6 +130,8 @@ Review the plan before applying. The first core apply belongs to the next projec
 - Infrastructure workflows may assume the Terraform role from `main`, pull requests or the protected `dev` environment.
 - The Terraform role uses AWS `PowerUserAccess` plus IAM permissions limited to project-prefixed roles.
 - Runtime access is separate: the Transaction API Lambda can write logs and read/create records only in its DynamoDB table.
+- The Request Handler can consume only Processing Requests and conditionally update only the project table.
+- EventBridge Pipes can read only the transaction Stream and send only to Processing Requests.
 - OIDC removes the need for permanent AWS keys in GitHub.
 
 The deployment role will receive a further least-privilege review in the security stage.

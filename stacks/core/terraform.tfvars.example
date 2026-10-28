@@ -7,3 +7,11 @@ log_retention_days      = 7
 # Replace these values with the immutable ZIP published by async-transaction-api.
 lambda_artifact_key     = "async-transaction-api/<git-sha>/async-transaction-api.zip"
 lambda_source_code_hash = "replace-with-base64-sha256"
+
+# Replace these values with the immutable ZIP published by async-transaction-request-handler.
+request_handler_artifact_key     = "async-transaction-request-handler/<git-sha>/async-transaction-request-handler.zip"
+request_handler_source_code_hash = "replace-with-base64-sha256"
+
+# Reserved domains intentionally exercise retry and DLQ behavior until later stages deploy these endpoints.
+external_processor_base_url = "https://processor.invalid/"
+callback_url                = "https://callback.invalid/v1/callbacks/transactions"

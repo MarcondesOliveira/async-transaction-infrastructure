@@ -23,3 +23,16 @@ The external processor simulator is hosted temporarily in the same AWS account b
 ## Artifact placeholders
 
 The core variables contain an intentionally invalid deployment location for planning before CI/CD exists. No apply may use the `not-published` key. A real immutable ZIP key and its Base64 SHA-256 are required in the next stage.
+
+## Safe pre-simulator request pipeline
+
+The Request Handler is deployed before the external simulator and callback endpoint.
+Reserved `.invalid` HTTPS domains prevent accidental calls to real services while
+allowing timeout, retry and DLQ behavior to be validated. Later stages replace both
+URLs through Terraform variables.
+
+## Request queue retry boundary
+
+Processing Requests uses a 90-second visibility timeout for a 15-second Lambda and
+moves a message to Failed Requests after three receives. Partial batch failure
+reporting prevents successful messages in the same batch from being retried.
