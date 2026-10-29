@@ -64,3 +64,24 @@ final head verification, plus rejection of existing objects and wrong commits.
 These tests do not prove real STS/S3 access. Workflow and documentation commits
 remain owner-operated; trust apply is complete, while workflow push and first
 manual publication remain pending.
+
+## Callback Handler trust applied; workflow prepared — 2026-10-29
+
+Read-only GitHub inspection confirmed an immutable subject prefix for the Callback
+Handler. Its verified value is only in ignored bootstrap tfvars. The saved plan
+`stage13-callback-oidc.tfplan` changes only its artifact-publisher trust entry:
+**0 additions, 1 in-place change, 0 deletions**. API/Request Handler entries,
+main-only restrictions, STS audience and S3 actions remain unchanged. After owner
+approval, the saved plan was applied: **0 added, 1 changed, 0 destroyed**. Live IAM
+inspection confirmed the Callback Handler's immutable subject and preservation of
+API/Request Handler trust, main-only restriction and STS audience. Post-apply plan
+returned exit code 0 with no changes. Actual runner OIDC and S3 publication have
+not been executed for this service.
+
+Manual workflow/script are prepared locally, using the validated Node.js 24 action
+and native Bash ZIP-entry check. Four non-secret deployment variables are configured
+in the Callback Handler GitHub repository, outside source code. Its real approved
+CI artifact passed verify-only; isolated AWS substitute tests passed conditional
+publication/final verification, existing-object rejection and wrong-commit rejection.
+YAML, shell syntax, dispatch/main guards and permissions were checked. README updated;
+owner commits/pushes and first real workflow run are pending. No Lambda deployment.
