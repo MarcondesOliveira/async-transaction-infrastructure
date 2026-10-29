@@ -17,7 +17,8 @@ data "aws_iam_policy_document" "project_deployment" {
     sid = "ManageProjectFunctions"
     actions = [
       "lambda:CreateFunction", "lambda:DeleteFunction", "lambda:GetFunction",
-      "lambda:GetFunctionConfiguration", "lambda:GetPolicy", "lambda:ListVersionsByFunction",
+      "lambda:GetFunctionConfiguration", "lambda:GetFunctionCodeSigningConfig",
+      "lambda:GetPolicy", "lambda:ListVersionsByFunction",
       "lambda:UpdateFunctionCode", "lambda:UpdateFunctionConfiguration",
       "lambda:AddPermission", "lambda:RemovePermission",
       "lambda:ListTags", "lambda:TagResource", "lambda:UntagResource"

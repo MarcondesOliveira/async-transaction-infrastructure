@@ -11,8 +11,8 @@ use the infrastructure repository pipeline. Destroy remains separately confirmed
 
 This chain is not complete yet. Existing CI/package jobs and manual publication
 workflows are already validated; publication alone is not deployment. The central
-workflow below is prepared but must be validated in GitHub before service pushes
-are connected to it. Infrastructure-push apply and destroy automation are still
+workflow below passed its first plan-only validation in GitHub; actual deployment
+and service-push integration remain pending. Infrastructure-push apply and destroy automation are still
 separate pending increments; they are not implied by the new static CI workflow.
 
 ## Central service deployment workflow
@@ -124,6 +124,17 @@ checks and Terraform fmt passed. A plan-only run with the owner's local identity
 and the actual existing state/published API artifact passed, proposing only the
 API package update. No apply or real smoke transaction was run. This does not
 prove permissions of the GitHub OIDC role; its first runner plan remains pending.
+
+GitHub runner validation: Infrastructure CI `40964440758` passed for commit
+`f640e0e15a57a22229a7d4896619a8157b1a65d6`. The first central plan
+(`40973525879`) authenticated through OIDC but failed during Lambda refresh:
+`lambda:GetFunctionCodeSigningConfig` was missing. After owner approval, a saved
+bootstrap plan added only that read action within the existing project-function
+scope: **0 added, 1 changed, 0 destroyed**. The post-apply bootstrap plan showed
+no changes. Central plan `40974175954` then succeeded through OIDC, reporting only
+`aws_lambda_function.transaction_api` as changed and no destructive changes.
+It explicitly reported `Plan validated; nothing applied.` Application deployment,
+real smoke execution and source-repository dispatch remain pending.
 
 References: [GITHUB_TOKEN and additional authentication](https://docs.github.com/en/actions/tutorials/authenticate-with-github_token),
 [workflow dispatch permission](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event).
