@@ -37,3 +37,28 @@ output "transaction_requests_pipe_name" {
   description = "Name of the EventBridge Pipe that routes pending transaction inserts."
   value       = aws_pipes_pipe.transaction_requests.name
 }
+
+output "callback_endpoint_url" {
+  description = "POST endpoint that validates callback JSON and publishes it to SNS."
+  value       = local.callback_endpoint
+}
+
+output "callback_handler_function_name" {
+  value       = aws_lambda_function.callback_handler.function_name
+  description = "Callback Handler Lambda for console event tests."
+}
+
+output "transaction_results_topic_arn" {
+  value       = aws_sns_topic.transaction_results.arn
+  description = "SNS topic carrying raw transaction results to SQS."
+}
+
+output "processing_results_queue_url" {
+  value       = aws_sqs_queue.processing_results.url
+  description = "Results consumed by the Callback Handler."
+}
+
+output "failed_results_queue_url" {
+  value       = aws_sqs_queue.failed_results.url
+  description = "Callback messages that exhausted processing attempts."
+}

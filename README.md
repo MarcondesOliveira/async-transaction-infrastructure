@@ -24,6 +24,7 @@ The current stage defines:
 - Request Handler Lambda with partial SQS batch failure reporting;
 - least-privilege runtime roles for the Request Handler and EventBridge Pipes.
 - independent external simulator stack with an HTTP API, two Lambdas, its own DynamoDB Stream table and a callback failure destination.
+- regional REST callback API integrated directly with SNS, raw delivery to Processing Results, Failed Results DLQ and the Callback Handler Lambda.
 
 No AWS resource is created by cloning or validating this repository. Creation requires an explicit `terraform apply`.
 
@@ -33,7 +34,7 @@ No AWS resource is created by cloning or validating this repository. Creation re
 bootstrap/
   Creates remote state, artifact storage, OIDC roles and the cost budget.
 stacks/core/
-  Creates the Transaction API and the asynchronous request pipeline.
+  Creates the Transaction API and asynchronous request/result pipelines.
 stacks/external-simulator/
   Hosts the independent simulator with a separate Terraform state.
 modules/
@@ -151,3 +152,5 @@ terraform -chdir=bootstrap destroy
 The final project checklist requires a separate AWS inventory and cost check after destruction.
 
 See [the simulator stack guide](stacks/external-simulator/README.md) for backend setup, artifact configuration, review steps and manual tests. Simulator deployment and core endpoint wiring are separate reviewed changes.
+
+See [the callback pipeline guide](docs/callback-pipeline.md) for the REST/SNS choice, callback acknowledgement, permissions, logging boundary and manual test sequence. Callback Handler deployment requires its own immutable artifact key/hash.

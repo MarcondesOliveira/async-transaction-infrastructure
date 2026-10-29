@@ -131,13 +131,30 @@ variable "external_processor_base_url" {
 }
 
 variable "callback_url" {
-  description = "Callback URL sent to the external processor. A reserved .invalid URL is safe before the callback exists."
+  description = "Optional callback URL override; null uses this stack's deployed callback endpoint."
   type        = string
-  default     = "https://callback.invalid/v1/callbacks/transactions"
+  default     = null
 
   validation {
-    condition     = can(regex("^https://", var.callback_url))
-    error_message = "callback_url must use HTTPS."
+    condition     = var.callback_url == null || can(regex("^https://", var.callback_url))
+    error_message = "callback_url must be null or use HTTPS."
+  }
+}
+
+variable "callback_handler_artifact_key" {
+  description = "Immutable S3 key for the Callback Handler ZIP; supply a real published artifact before apply."
+  type        = string
+  default     = "async-transaction-callback-handler/not-published/async-transaction-callback-handler.zip"
+}
+
+variable "callback_handler_source_code_hash" {
+  description = "Base64 SHA-256 of the Callback Handler ZIP."
+  type        = string
+  default     = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9+/]{43}=$", var.callback_handler_source_code_hash))
+    error_message = "callback_handler_source_code_hash must be a Base64 SHA-256."
   }
 }
 

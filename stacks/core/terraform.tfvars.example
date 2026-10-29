@@ -14,4 +14,7 @@ request_handler_source_code_hash = "replace-with-base64-sha256"
 
 # Reserved domains intentionally exercise retry and DLQ behavior until later stages deploy these endpoints.
 external_processor_base_url = "https://processor.invalid/"
-callback_url                = "https://callback.invalid/v1/callbacks/transactions"
+callback_url                = null # Use this stack's callback endpoint.
+
+callback_handler_artifact_key     = "async-transaction-callback-handler/<git-sha>/async-transaction-callback-handler.zip"
+callback_handler_source_code_hash = "replace-with-base64-sha256"

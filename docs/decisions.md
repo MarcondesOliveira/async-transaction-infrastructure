@@ -48,3 +48,15 @@ Stream batches contain one operation and are filtered to inserts of accepted pro
 ## Simulator retention
 
 An accepted simulator operation also owns its idempotency data in one item. A 24-hour TTL applies to that whole item, appropriate for a temporary demonstration. DynamoDB deletes expired records asynchronously. This is separate from the core transaction and idempotency retention design and is not a permanent financial ledger.
+
+## Direct callback publication through a REST API
+
+The callback uses a regional REST API because HTTP API does not offer an SNS Publish integration subtype. REST request validation and URL-encoded SNS publication preserve the approved direct-service boundary. A successful publish returns `202 {"accepted":true}`; it does not echo the event ID or confirm final processing. The Request Handler receives the generated endpoint through a Terraform reference. Existing operations with old callback URLs are not rewritten.
+
+## Callback queue and transaction permissions
+
+SNS raw delivery avoids an envelope in SQS bodies. Results use the same 90-second visibility / three-receive redrive boundary as requests and support partial batch failures. Callback receipts and terminal-state writes share one DynamoDB transaction. Runtime IAM grants the underlying read, put, update and condition-check actions on the main table; final-state conflicts remain visible failures rather than silent acknowledgements.
+
+## REST API regional logging ownership
+
+No regional API Gateway logging role is currently configured. This stage does not take ownership of `aws_api_gateway_account`, a shared regional configuration, as a side effect of adding one endpoint. Lambda logs and method metrics are available; regional REST access/execution logging setup remains for the observability review.

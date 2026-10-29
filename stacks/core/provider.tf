@@ -25,4 +25,6 @@ locals {
   lambda_log_group    = "/aws/lambda/${local.transaction_api}"
   handler_log_group   = "/aws/lambda/${local.request_handler}"
   api_access_log_name = "/aws/apigateway/${local.transaction_api}"
+  callback_handler    = "${local.resource_prefix}-callback-handler"
+  callback_endpoint   = "https://${aws_api_gateway_rest_api.callbacks.id}.execute-api.${var.aws_region}.amazonaws.com/${var.environment}/callbacks/transactions"
 }

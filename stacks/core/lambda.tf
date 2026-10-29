@@ -45,7 +45,7 @@ resource "aws_lambda_function" "request_handler" {
 
   environment {
     variables = {
-      Callback__Url              = var.callback_url
+      Callback__Url              = coalesce(var.callback_url, local.callback_endpoint)
       DynamoDb__TableName        = aws_dynamodb_table.transactions.name
       ExternalProcessor__BaseUrl = var.external_processor_base_url
     }
