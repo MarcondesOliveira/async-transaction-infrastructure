@@ -1,5 +1,24 @@
 # Stage 12 — Observability, security and resilience
 
+## Bounded lab closeout — 2026-10-29
+
+The owner requested reducing Stage 12 to the needs of a disposable portfolio lab.
+The [operations guide](lab-operations.md) completes configuration/secret handling,
+timeout/retry/retention review and manual recovery instructions for all three
+failure queues. Reviewed live Lambda timeouts and environment key names, plus
+project event-source mapping batch/retry settings; no secret values were printed.
+Other retention settings were inspected in source, not freshly queried in AWS.
+Three receives, sequential request batching, asynchronous TTL cleanup and limited
+Stream recovery are explicit tradeoffs rather than production guarantees.
+
+Earlier stage evidence already covers successful processing, duplicate/conflict,
+timeout and retry exhaustion into DLQs; these tests were not repeated here.
+The recovery guide was reviewed against the actual worker's event parser but no
+recovery/replay was executed, and it must not be described as a tested automated
+recovery system. No new resources, application code, paid features, AWS writes or
+new test transactions were introduced by this closeout. Documentation checks and
+the owner's review/commit/push are the remaining handoff; Stage 13 is not started.
+
 ## Initial security audit — 2026-10-29
 
 ### Corrections applied and manual API regression passed

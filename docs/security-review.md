@@ -32,8 +32,8 @@ plans are covered by Git ignore rules; no matching real tfvars/state/plan files
 were found tracked in the infrastructure repository. Applications use the AWS
 credential chain/execution roles rather than embedded AWS access keys.
 
-One exception to the documented configuration boundary was found:
-`stacks/core/backend.hcl` is tracked even though the README describes it as local
+One exception to the documented configuration boundary was found and corrected:
+`stacks/core/backend.hcl` was tracked even though the README describes it as local
 and ignored. Its actual contents are bucket/state-path/region/locking settings,
 not credentials. Keep the real file local, exclude it from future Git tracking
 and retain only the existing illustrative backend example in the repository.
@@ -203,8 +203,8 @@ This validates the application path after the runtime policy change, not CI acce
 No paid security service, custom alarm, KMS key or production feature was enabled.
 The IAM least-privilege review and its application regression are complete for
 this increment; remaining configuration/scope decisions are not automatically
-closed by that result. Resilience and DLQ recovery documentation are
-separate remaining Stage 12 work.
+closed by that result. The subsequent [lab operations review](lab-operations.md)
+records configuration handling, accepted resilience limits and DLQ recovery.
 
 ## Primary references
 

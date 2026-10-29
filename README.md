@@ -9,6 +9,10 @@ The [Stage 12 security review](docs/security-review.md) records scanner results,
 IAM/configuration findings and the limits of this temporary lab. Open findings
 must not be mistaken for production security approval.
 
+The [lab operations guide](docs/lab-operations.md) records configuration handling,
+timeout/retention tradeoffs and the manual inspection/recovery procedure for each
+failure queue. Stage 12 adds no custom alarms or production recovery platform.
+
 Terraform infrastructure for the Async Transaction Processing portfolio project.
 
 This repository owns AWS resources only. Application source code is built in independent repositories and supplied as immutable ZIP artifacts.
