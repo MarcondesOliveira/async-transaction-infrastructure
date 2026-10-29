@@ -40,3 +40,27 @@ The planned publication workflow must explicitly use conditional writes and must
 not be described as a new IAM isolation boundary.
 
 Reference: [GitHub OIDC immutable subject format](https://docs.github.com/en/actions/reference/security/oidc).
+
+## Request Handler prerequisite applied; workflow prepared — 2026-10-29
+
+Read-only inspection confirmed that the Request Handler also uses an immutable
+subject prefix. Its verified value was added only to ignored bootstrap tfvars;
+no owner/repository/account IDs were added to tracked source. The saved plan
+`stage13-request-oidc.tfplan` has **0 additions, 1 in-place change, 0 deletions**:
+only its legacy trust subject is replaced. API trust, audience, main-only scope,
+S3 permissions and other repository entries are unchanged. After explicit owner
+approval, the saved plan was applied: **0 added, 1 changed, 0 destroyed**. Live IAM
+inspection confirmed the Request Handler's immutable subject and preserved the
+API trust, audience and main restriction. The post-apply plan returned exit code
+0 with no changes. No real runner OIDC authentication or S3 upload has been
+performed for this service.
+
+The Request Handler publication workflow/script are prepared locally using the
+API pattern, with the Node.js 24 AWS action pinned to v6.3.0's commit and no rg
+dependency. Four non-secret deployment variables were configured in its GitHub
+repository, with values kept outside source. Its actual CI artifact passed local
+verification; an isolated AWS substitute validated three conditional puts and
+final head verification, plus rejection of existing objects and wrong commits.
+These tests do not prove real STS/S3 access. Workflow and documentation commits
+remain owner-operated; trust apply is complete, while workflow push and first
+manual publication remain pending.
