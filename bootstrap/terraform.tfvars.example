@@ -4,3 +4,9 @@ monthly_budget_usd = 5
 
 # Set this before the first apply. Leaving it null intentionally skips the budget.
 budget_alert_email = null
+
+# Routine CI can manage these existing resources, not create new API Gateway APIs.
+# Copy real identifiers from the reviewed stack outputs/state into ignored tfvars.
+deployment_http_api_ids             = []
+deployment_rest_api_ids             = []
+deployment_event_source_mapping_ids = []

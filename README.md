@@ -5,6 +5,10 @@ logs, native service metrics and existing DLQs. Custom alarm metrics and operati
 SNS email notifications are intentionally deferred to a future production-oriented
 extension; no automated incident detection is claimed for the current lab.
 
+The [Stage 12 security review](docs/security-review.md) records scanner results,
+IAM/configuration findings and the limits of this temporary lab. Open findings
+must not be mistaken for production security approval.
+
 Terraform infrastructure for the Async Transaction Processing portfolio project.
 
 This repository owns AWS resources only. Application source code is built in independent repositories and supplied as immutable ZIP artifacts.
@@ -134,15 +138,21 @@ Review the plan before applying. The first core apply belongs to the next projec
 ## Security boundaries
 
 - Application workflows from `main` may publish artifacts only.
-- Infrastructure workflows may assume the Terraform role from `main`, pull requests or the protected `dev` environment.
-- The Terraform role uses AWS `PowerUserAccess` plus IAM permissions limited to project-prefixed roles.
+- The applied Stage 12 security change restricts infrastructure OIDC trust to `main`; PR and environment-only subjects are excluded. Verify the repository's actual OIDC subject format before enabling Stage 13 workflows.
+- The routine Terraform role uses project-service permissions instead of `PowerUserAccess`. It can read/use seven existing runtime roles, but cannot create/edit IAM roles or manage its own permissions. Bootstrap and IAM changes remain owner-operated.
+- Existing API Gateway IDs and event-source mapping UUIDs are supplied in ignored bootstrap tfvars. Initial provisioning, replacement APIs/mappings and complete teardown require the owner; update these identifiers after replacement. Routine CI is not an administrator or a bootstrap identity.
 - Runtime access is separate: the Transaction API Lambda can write logs and read/create records only in its DynamoDB table.
 - The Request Handler can consume only Processing Requests and conditionally update only the project table.
 - EventBridge Pipes can read only the transaction Stream and send only to Processing Requests.
 - The simulator API can read/create only simulator operations; its worker can read only that Stream, write its own logs and send failure metadata to its own queue.
 - OIDC removes the need for permanent AWS keys in GitHub.
 
-The deployment role will receive a further least-privilege review in the security stage.
+These security corrections were deployed on 2026-10-29. Both stacks' post-apply
+plans showed no differences, and live IAM policies were checked. A manual API
+POST/GET regression passed with a final SUCCEEDED result and an Applied callback.
+The security review records validation scope
+and remaining limitations; simulated allow/deny results do not replace a real
+OIDC/deployment test in Stage 13.
 
 ## Destruction
 

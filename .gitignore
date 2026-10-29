@@ -11,4 +11,4 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 .env
-stacks/external-simulator/backend.hcl
+backend.hcl

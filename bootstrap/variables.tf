@@ -1,3 +1,33 @@
+variable "deployment_http_api_ids" {
+  description = "Existing project HTTP API IDs the routine deployer may manage; API creation is owner-operated."
+  type        = set(string)
+  default     = []
+  validation {
+    condition     = alltrue([for id in var.deployment_http_api_ids : can(regex("^[a-z0-9]{1,20}$", id))])
+    error_message = "Use literal HTTP API IDs, without wildcards or ARN/path characters."
+  }
+}
+
+variable "deployment_rest_api_ids" {
+  description = "Existing project REST API IDs the routine deployer may manage."
+  type        = set(string)
+  default     = []
+  validation {
+    condition     = alltrue([for id in var.deployment_rest_api_ids : can(regex("^[a-z0-9]{1,20}$", id))])
+    error_message = "Use literal REST API IDs, without wildcards or ARN/path characters."
+  }
+}
+
+variable "deployment_event_source_mapping_ids" {
+  description = "Existing project Lambda event-source mapping UUIDs the routine deployer may manage."
+  type        = set(string)
+  default     = []
+  validation {
+    condition     = alltrue([for id in var.deployment_event_source_mapping_ids : can(regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", id))])
+    error_message = "Use literal mapping UUIDs, without wildcards."
+  }
+}
+
 variable "aws_region" {
   description = "AWS region used by the project."
   type        = string

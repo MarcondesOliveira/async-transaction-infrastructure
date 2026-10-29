@@ -29,10 +29,8 @@ data "aws_iam_policy_document" "transaction_api" {
   statement {
     sid = "ReadAndCreateTransactions"
     actions = [
-      "dynamodb:DescribeTable",
       "dynamodb:GetItem",
-      "dynamodb:PutItem",
-      "dynamodb:TransactWriteItems"
+      "dynamodb:PutItem"
     ]
     resources = [aws_dynamodb_table.transactions.arn]
   }

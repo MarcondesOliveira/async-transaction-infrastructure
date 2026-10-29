@@ -1,8 +1,14 @@
 locals {
   infrastructure_subjects = [
-    "repo:${var.github_owner}/${var.infrastructure_repository}:ref:refs/heads/main",
-    "repo:${var.github_owner}/${var.infrastructure_repository}:pull_request",
-    "repo:${var.github_owner}/${var.infrastructure_repository}:environment:${var.environment}"
+    "repo:${var.github_owner}/${var.infrastructure_repository}:ref:refs/heads/main"
+  ]
+
+  runtime_role_arns = [
+    for suffix in [
+      "transaction-api-lambda", "request-handler-lambda", "callback-handler-lambda",
+      "transaction-requests-pipe", "callback-gateway",
+      "external-simulator-api", "external-simulator-worker"
+    ] : "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/${local.resource_prefix}-${suffix}"
   ]
 
   artifact_publisher_subjects = [
@@ -29,7 +35,7 @@ data "aws_iam_policy_document" "terraform_oidc_trust" {
     }
 
     condition {
-      test     = "StringLike"
+      test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
       values   = local.infrastructure_subjects
     }
@@ -43,35 +49,27 @@ resource "aws_iam_role" "terraform_deployer" {
   max_session_duration = 3600
 }
 
-resource "aws_iam_role_policy_attachment" "terraform_power_user" {
-  role       = aws_iam_role.terraform_deployer.name
-  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/PowerUserAccess"
-}
-
 data "aws_iam_policy_document" "terraform_iam_management" {
   statement {
-    sid = "ManageProjectRoles"
+    sid = "ReadExistingRuntimeRoles"
     actions = [
-      "iam:AttachRolePolicy",
-      "iam:CreateRole",
-      "iam:DeleteRole",
-      "iam:DeleteRolePolicy",
-      "iam:DetachRolePolicy",
       "iam:GetRole",
       "iam:GetRolePolicy",
       "iam:ListAttachedRolePolicies",
       "iam:ListRolePolicies",
-      "iam:ListRoleTags",
-      "iam:PassRole",
-      "iam:PutRolePolicy",
-      "iam:TagRole",
-      "iam:UntagRole",
-      "iam:UpdateAssumeRolePolicy",
-      "iam:UpdateRoleDescription"
+      "iam:ListRoleTags"
     ]
-    resources = [
-      "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/${local.resource_prefix}-*"
-    ]
+    resources = local.runtime_role_arns
+  }
+  statement {
+    sid       = "PassOnlyExistingRuntimeRolesToProjectServices"
+    actions   = ["iam:PassRole"]
+    resources = local.runtime_role_arns
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["lambda.amazonaws.com", "pipes.amazonaws.com", "apigateway.amazonaws.com"]
+    }
   }
 }
 
@@ -98,7 +96,12 @@ data "aws_iam_policy_document" "terraform_state_access" {
       "s3:GetObject",
       "s3:PutObject"
     ]
-    resources = ["${aws_s3_bucket.terraform_state.arn}/*"]
+    resources = flatten([
+      for stack in ["core", "external-simulator"] : [
+        "${aws_s3_bucket.terraform_state.arn}/${var.project_name}/${var.environment}/${stack}.tfstate",
+        "${aws_s3_bucket.terraform_state.arn}/${var.project_name}/${var.environment}/${stack}.tfstate.tflock"
+      ]
+    ])
   }
 
   statement {

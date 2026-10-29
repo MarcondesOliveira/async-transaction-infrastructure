@@ -1,5 +1,58 @@
 # Stage 12 — Observability, security and resilience
 
+## Initial security audit — 2026-10-29
+
+### Corrections applied and manual API regression passed
+
+The owner approved removing IAM administration from routine CI deployment.
+Applied bootstrap changes remove PowerUserAccess and PR/environment-only OIDC trust,
+replace broad deployment privileges with project service permissions, permit only
+read/PassRole on seven existing runtime roles, and narrow state object writes.
+Existing API/mapping identifiers stay in ignored tfvars; owner performs initial
+provisioning/replacements and IAM administration. API policy removes invalid/unused
+actions. Real backend was untracked without deleting its local copy; its Git index
+deletion is pending the owner's manual commit.
+
+ValidatePolicy returned no findings for three candidate deployment policies.
+Thirteen per-resource draft-policy simulations passed (allowed project update and
+runtime PassRole; denied IAM mutation, outside-project update and invalid PassRole).
+These simulations do not execute the draft role or prove live OIDC/CI operation.
+See [security correction details](security-review.md).
+
+Saved plans: bootstrap **1 add, 3 changes, 1 removal** (removal is only the
+PowerUserAccess attachment); core **0 adds, 1 change, 0 removals** (API policy).
+Both approved plans were applied successfully with the owner's privileged identity:
+bootstrap **1 added, 3 changed, 1 destroyed** (policy attachment only), followed by
+core **0 added, 1 changed, 0 destroyed**. No application resource was deleted.
+Both post-apply plans returned exit code 0 with no differences. Live IAM reads
+confirmed removal of attached managed policies, exact main-branch OIDC trust,
+read/PassRole-only IAM actions and API DynamoDB GetItem/PutItem permissions.
+Manual POST/GET regression passed for transaction
+`e3c03b53-6d75-40cd-8de7-b041caa72218` submitted by the owner: Create/202 and Get/200
+were confirmed in API logs; CallbackHandled/Applied was logged at
+2026-10-29T16:42:22.051Z; GET returned SUCCEEDED/APPROVED with completion time
+2026-10-29T16:42:19.2372742+00:00. Initial quoted-ID log filters returned no events;
+queries over the test's two-minute window found the correlated events. This was
+a log-query limitation, not an application failure. The owner's commit/push remain
+pending. Real OIDC assumption and CI deployment have not been tested.
+
+See [the security review](security-review.md) for scope, limitations, triage and
+corrections. During the initial audit, no configuration fixes were made; local
+corrections were subsequently approved and applied as recorded above. The initial
+audit itself made no AWS mutations.
+Trivy secret scan found 0 matches in the scanned source files; configuration scan
+reported 25 recommendations (3 HIGH, 3 MEDIUM, 19 LOW), retained without suppression.
+Direct/transitive NuGet package checks returned no vulnerable packages for the
+four application repositories on the audit date. Simulator query initially hit a
+local CLR failure and succeeded on retry without restore.
+
+Priority findings at the time of the initial audit: OIDC trust included PRs and role privileges were broad
+with self-management potential; API policy contains an AWS-confirmed INVALID_ACTION
+for dynamodb:TransactWriteItems plus unused DescribeTable; real core backend config
+is tracked contrary to the README. Backend contains environment metadata, not
+credentials. Owner review is required before corrections; no exploitation or
+privileged simulation was attempted.
+
 ## Operational alarm scope decision — 2026-10-29
 
 The owner decided that custom alarms and operational email notifications are
