@@ -86,6 +86,22 @@ variable "infrastructure_repository" {
   default     = "async-transaction-infrastructure"
 }
 
+variable "github_infrastructure_oidc_subject_prefix" {
+  description = "Verified immutable infrastructure repository OIDC prefix; keep real IDs in ignored tfvars. Null retains the legacy format until configured."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition = var.github_infrastructure_oidc_subject_prefix == null ? true : (
+      can(regex("^repo:[A-Za-z0-9-]+@[0-9]+/[A-Za-z0-9_.-]+@[0-9]+$", var.github_infrastructure_oidc_subject_prefix)) &&
+      startswith(var.github_infrastructure_oidc_subject_prefix, "repo:${var.github_owner}@") &&
+      try(split("@", split("/", var.github_infrastructure_oidc_subject_prefix)[1])[0], "") == var.infrastructure_repository
+    )
+    error_message = "Use the verified repo:OWNER@ID/INFRASTRUCTURE-REPOSITORY@ID prefix; wildcards, other repositories and branch suffixes are not allowed."
+  }
+}
+
 variable "budget_alert_email" {
   description = "Email that receives AWS Budget alerts. Null leaves the budget disabled until an address is explicitly supplied."
   type        = string

@@ -41,6 +41,32 @@ The current stage defines:
 
 No AWS resource is created by cloning or validating this repository. Creation requires an explicit `terraform apply`.
 
+## Delivery automation — in progress
+
+All four application repositories have validated GitHub Actions CI, versioned
+ARM64 Lambda packages and manually dispatched S3 publication through OIDC.
+Publication checks the approved CI run, package identity/checksums and conditional
+S3 writes. It does not update any Lambda or invoke Terraform.
+
+The required final path is a service push to main followed by CI, packaging,
+artifact publication, infrastructure plan/deploy and smoke verification, without
+local deployment commands. Infrastructure changes must use its own pipeline.
+That full chain is not implemented or validated yet; existing role definitions
+and successful S3 publication alone do not demonstrate continuous deployment.
+
+Pipeline work resumes with infrastructure OIDC and a controlled central deployment
+workflow. Publication and deployment permissions remain separate; concurrent
+service changes must be serialized per Terraform stack without losing another
+service's deployed version. PR validation must not receive deployment credentials.
+Secrets stay outside source. Privileged bootstrap/IAM work remains owner-operated
+unless an explicit reviewed permission change is approved.
+
+See [continuous delivery implementation notes](docs/continuous-delivery.md) for
+the cross-repository token setup, deployment rules and current prerequisites.
+
+Destroy is a separate, explicitly confirmed workflow, never a push-triggered job.
+Do not perform teardown until demonstration/evidence is complete and authorized.
+
 ## Repository structure
 
 ```text
@@ -155,8 +181,10 @@ These security corrections were deployed on 2026-10-29. Both stacks' post-apply
 plans showed no differences, and live IAM policies were checked. A manual API
 POST/GET regression passed with a final SUCCEEDED result and an Applied callback.
 The security review records validation scope
-and remaining limitations; simulated allow/deny results do not replace a real
-OIDC/deployment test in Stage 13.
+and remaining limitations; simulated allow/deny results do not prove real
+infrastructure OIDC/deployment. That integration is required but not yet validated;
+application artifact publishing OIDC was validated separately in all four
+application repositories.
 
 ## Destruction
 

@@ -1,6 +1,6 @@
 locals {
   infrastructure_subjects = [
-    "repo:${var.github_owner}/${var.infrastructure_repository}:ref:refs/heads/main"
+    "${coalesce(var.github_infrastructure_oidc_subject_prefix, "repo:${var.github_owner}/${var.infrastructure_repository}")}:ref:refs/heads/main"
   ]
 
   runtime_role_arns = [

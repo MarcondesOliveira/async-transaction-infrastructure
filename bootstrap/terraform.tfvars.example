@@ -7,6 +7,7 @@ monthly_budget_usd = 5
 # Example shape: { "example-service" = "repo:example-owner@123/example-service@456" }
 # Unmapped repositories retain the legacy name-based format pending verification.
 github_application_oidc_subject_prefixes = {}
+github_infrastructure_oidc_subject_prefix = null
 
 # Set this before the first apply. Leaving it null intentionally skips the budget.
 budget_alert_email = null
