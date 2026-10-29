@@ -12,6 +12,12 @@ resource "aws_lambda_function" "api" {
   memory_size      = 512
   timeout          = 30
 
+  # ASP.NET already emits JSON; avoid double encoding it at the runtime layer.
+  logging_config {
+    log_format = "Text"
+    log_group  = aws_cloudwatch_log_group.api.name
+  }
+
   environment {
     variables = {
       ASPNETCORE_ENVIRONMENT              = "Production"
@@ -36,6 +42,13 @@ resource "aws_lambda_function" "worker" {
   source_code_hash = var.simulator_source_code_hash
   memory_size      = 512
   timeout          = 30
+
+  logging_config {
+    log_format            = "JSON"
+    application_log_level = "INFO"
+    system_log_level      = "INFO"
+    log_group             = aws_cloudwatch_log_group.worker.name
+  }
 
   environment {
     variables = {

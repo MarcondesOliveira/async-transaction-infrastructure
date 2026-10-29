@@ -1,7 +1,7 @@
 # Stage 12 — Observability, security and resilience
 
 Status: in progress. The following evidence covers the Request Handler and Callback
-Handler and Transaction API observability increments, not completion of the entire stage.
+Handler, Transaction API and external simulator observability increments, not completion of the entire stage.
 
 ## Request Handler package and reviewed plan
 
@@ -219,3 +219,78 @@ destination account, external reference or idempotency key. Success and GET
 correlation separation are now validated in AWS; POST replay and failure events
 still have local test coverage only for this increment. Owner review and
 infrastructure commit/push remain pending.
+
+## External simulator package and deployment plan
+
+- Owner-pushed application commit confirmed against GitHub `main`:
+  `73ba9b209897ac6a6d3b4cb3afb2eee91688d73d`; checkout is clean.
+- Application build passed without warnings/errors, all 30 tests passed
+  (13 unit, 13 integration, 4 contract), and formatting verification passed.
+- An initial test expected an exception from `HttpClient`. Detailed logs showed
+  Development middleware handling it as HTTP 500. After owner approval the test
+  was corrected to assert that status, safe log fields and exclusion of original
+  provider messages from the response. Application behavior was not changed by
+  this test correction.
+- Framework-dependent Release publish for `net10.0` / `linux-arm64` succeeded.
+- S3 key:
+  `external-transaction-processor-simulator/73ba9b209897ac6a6d3b4cb3afb2eee91688d73d/external-transaction-processor-simulator.zip`.
+- ZIP SHA-256:
+  `eba97914f1fc514f11e12aa8c1ffe034d195c0a4c8e66b2dfb74d66127473d43`.
+- Lambda Base64 checksum:
+  `66l5FPH8UU8R4Sqowf/gNNGVwKTI5mst+3TWYSdHPUM=`.
+- Conditional S3 creation, AES256 encryption and SHA-256 validation succeeded;
+  S3 returned the matching package checksum.
+- `terraform fmt -check`, `terraform validate` and `git diff --check` passed.
+- Saved simulator-stack plan: `stage12-simulator-observability.tfplan`,
+  **0 to add, 2 to change, 0 to destroy**.
+
+Both simulator Lambdas share the new package. Only the worker additionally changes
+its runtime logging format from Text to JSON, with application/system INFO in its
+existing log group. The API's existing Text format/log group are declared explicitly
+without a runtime diff, because ASP.NET already emits JSON. IAM, endpoints,
+storage, Stream trigger, retry policy and failure destination are unchanged.
+No core-stack changes are included in this plan.
+
+The owner approved the saved simulator plan. Apply completed with **0 added,
+2 changed, 0 destroyed**. Both Lambdas are `Active`, last update `Successful`,
+with matching checksum `66l5FPH8UU8R4Sqowf/gNNGVwKTI5mst+3TWYSdHPUM=`.
+The API retains runtime Text in its existing log group; the worker uses JSON
+with application/system INFO in its existing group. A post-apply simulator-stack
+Terraform plan exited with code 0 and reported no changes.
+
+Manual log validation remains pending. Have the owner create a transaction through the main
+API with Bruno or Swagger. Verify `SimulatorSubmissionHandled` (202) under the
+ASP.NET JSON State object, and native worker `SimulatorCallbackStarted` followed
+by `SimulatorCallbackDelivered`, with matching transaction/correlation/processor
+IDs. Delivery means HTTP acknowledgement, not confirmation that the downstream
+Callback Handler has applied the result; confirm final state separately with GET.
+The new failure and replay log formats need separate runtime checks; do not claim
+they were validated by a success-only request.
+
+## Manual success validation — External simulator logs
+
+The owner submitted transaction `126145e1-8e8f-4f83-a6c2-90fd2da37246` through
+the main API, with correlation ID `45678901-4567-4567-8567-456789012345`.
+Creation time was `2026-10-29T01:54:30.5055001Z`.
+
+The simulator API emitted ASP.NET JSON with `State.EventName` equal to
+`SimulatorSubmissionHandled`, HTTP status 202, that transaction/request
+correlation, and processor ID `8a0353a7-bd9f-4c60-9a72-eb295f272807`.
+
+The worker emitted native JSON events:
+
+- `SimulatorCallbackStarted` at `2026-10-29T01:54:37.824Z`.
+- `SimulatorCallbackDelivered` at `2026-10-29T01:54:40.429Z`.
+
+Both worker records included the matching transaction/correlation/processor IDs,
+callback event ID `278e820d-57d1-4aaf-ada7-c7da7937dac2`, Stream event ID
+`1653d8b31f78a4f33d4284aa414da71e`, and simulated outcome `Succeeded` as
+top-level fields. The inspected custom events did not include the payload,
+amount, destination account, external reference, callback URL or idempotency key.
+
+GET returned HTTP 200, `SUCCEEDED` / `APPROVED`, with the matching processor ID.
+Completion time was `01:54:39.831677Z` and final table update was
+`01:54:41.8771483Z`. Delivery acknowledgement and subsequent application of the
+result are therefore independently confirmed. Failure/replay/timeout log paths
+remain locally tested only for this simulator logging increment. Infrastructure
+owner review and commit/push are pending; Stage 12 remains in progress.
