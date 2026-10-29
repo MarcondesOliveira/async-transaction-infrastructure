@@ -85,3 +85,24 @@ CI artifact passed verify-only; isolated AWS substitute tests passed conditional
 publication/final verification, existing-object rejection and wrong-commit rejection.
 YAML, shell syntax, dispatch/main guards and permissions were checked. README updated;
 owner commits/pushes and first real workflow run are pending. No Lambda deployment.
+
+## Simulator trust applied; workflow prepared — 2026-10-29
+
+Read-only GitHub inspection confirmed an immutable simulator subject prefix; the
+verified value was added only to ignored bootstrap tfvars. Saved plan
+`stage13-simulator-oidc.tfplan`: **0 additions, 1 in-place change, 0 deletions**,
+replacing only the simulator's artifact-publisher trust subject. API, Request and
+Callback entries, main restrictions, STS audience and S3 actions are preserved.
+After explicit owner approval, the saved plan was applied: **0 added, 1 changed,
+0 destroyed**. Live IAM inspection confirmed all four immutable main-branch
+application subjects and the STS audience. Post-apply plan returned exit code 0
+with no changes. No simulator runner OIDC/S3 publication has been executed yet.
+
+Manual workflow/script are prepared using the existing Node.js 24 action and
+native Bash verification pattern. Four non-secret repository variables are
+configured outside source. The real approved CI ZIP passed verify-only; isolated
+AWS substitute tests passed conditional publication/final verification and
+rejection of existing objects and wrong commits. YAML, shell, dispatch/main
+guards and permissions checked. One ZIP still serves both simulator functions;
+neither is deployed by publication. Owner commits/pushes and first real run remain
+pending; no application logic changed.
