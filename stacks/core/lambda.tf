@@ -43,6 +43,13 @@ resource "aws_lambda_function" "request_handler" {
   memory_size = var.request_handler_memory_mb
   timeout     = var.request_handler_timeout_seconds
 
+  logging_config {
+    log_format            = "JSON"
+    application_log_level = "INFO"
+    system_log_level      = "INFO"
+    log_group             = aws_cloudwatch_log_group.request_handler.name
+  }
+
   environment {
     variables = {
       Callback__Url              = coalesce(var.callback_url, local.callback_endpoint)
