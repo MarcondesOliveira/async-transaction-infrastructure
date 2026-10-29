@@ -14,6 +14,12 @@ resource "aws_lambda_function" "transaction_api" {
   memory_size = var.lambda_memory_mb
   timeout     = var.lambda_timeout_seconds
 
+  # ASP.NET emits JSON itself; native JSON logging would double-encode it.
+  logging_config {
+    log_format = "Text"
+    log_group  = aws_cloudwatch_log_group.transaction_api.name
+  }
+
   environment {
     variables = {
       ASPNETCORE_ENVIRONMENT = "Production"

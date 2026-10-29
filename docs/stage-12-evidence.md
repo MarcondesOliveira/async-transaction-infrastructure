@@ -1,7 +1,7 @@
 # Stage 12 — Observability, security and resilience
 
 Status: in progress. The following evidence covers the Request Handler and Callback
-Handler observability increments, not completion of the entire stage.
+Handler and Transaction API observability increments, not completion of the entire stage.
 
 ## Request Handler package and reviewed plan
 
@@ -150,3 +150,72 @@ ID above. Completion time was `01:18:44.1347969Z` and the final table update was
 `01:18:45.6729837Z`. This validates the deployed applied-result logging path;
 the new duplicate and failure log formats remain covered locally, not by this
 manual AWS success test. Infrastructure owner review and commit/push are pending.
+
+## Transaction API package and deployment plan
+
+- Owner-pushed commit confirmed against GitHub `main`:
+  `7d440ef121afbd040ebd05817e54a67f305e502b`; local checkout is clean.
+- Application build passed with zero warnings/errors, all 25 tests passed
+  (9 unit, 13 HTTP integration, 3 contract), and formatting verification passed.
+- `CA1873` findings were resolved after owner review by checking log levels
+  before preparing exception metadata. An additional test-only `CA1861` finding
+  was resolved using a reusable expected-status array. No analyzer was disabled.
+- Framework-dependent Release publish for `net10.0` / `linux-arm64` succeeded.
+- S3 key:
+  `async-transaction-api/7d440ef121afbd040ebd05817e54a67f305e502b/async-transaction-api.zip`.
+- ZIP SHA-256:
+  `4301e5bb5c6f0ef6516c88f83ac754c217b82bd941d8594d4f5d8606c3332101`.
+- Lambda Base64 checksum:
+  `QwHlu1xvDvZRbIj4OsdUwhe4K9lB2FlNT12GBsMzIQE=`.
+- Conditional S3 creation, AES256 encryption and SHA-256 validation succeeded;
+  S3 returned the matching checksum.
+- `terraform fmt -check`, `terraform validate` and `git diff --check` passed.
+- Saved plan: `stage12-api-observability.tfplan`, **0 to add, 1 to change,
+  0 to destroy**, changing only the existing Transaction API package key/hash.
+
+Terraform now explicitly declares the existing runtime `Text` log format and
+existing API log group; these settings produce no runtime diff. ASP.NET itself
+emits JSON with structured properties under `State`, unlike the native
+`ILambdaLogger` top-level fields used by the SQS handlers. Keeping runtime `Text`
+avoids double encoding the ASP.NET JSON. Endpoints, IAM, timeouts, queues and
+other Lambdas are unchanged by the plan.
+
+The owner approved the saved plan. Apply completed with **0 added, 1 changed,
+0 destroyed**. The API Lambda is `Active`, with last update `Successful` and
+the expected checksum `QwHlu1xvDvZRbIj4OsdUwhe4K9lB2FlNT12GBsMzIQE=`.
+Runtime logging remains `Text` in the existing transaction-api log group, as
+intended for ASP.NET-generated JSON. A post-apply Terraform plan exited with
+code 0 and reported no changes.
+
+Manual validation remains pending. Have the owner POST a new transaction through Bruno or Swagger and GET its ID;
+inspect `TransactionApiHandled` with HTTP statuses 202/200 and matching identifiers
+in the API log group. Replaying an identical POST with a different request
+correlation is a separate check: stored `CorrelationId` must remain original,
+while `RequestCorrelationId` follows the replay. Failure-log runtime tests must
+not be claimed as covered by a successful transaction alone.
+
+## Manual success validation — Transaction API logs
+
+The owner created transaction `235092fe-563e-46a5-806f-01aaaea4a056` with
+correlation ID `34567890-3456-4456-8456-345678901234`. CloudWatch confirmed
+`TransactionApiHandled` with `Operation=Create`, `HttpStatus=202` and matching
+transaction/request correlations. The persisted creation time was
+`2026-10-29T01:32:05.6935952Z`.
+
+GET returned HTTP `200`, `SUCCEEDED` / `APPROVED`, with processor ID
+`aed340de-1f74-4b8f-bd43-42263d671756`, completion at `01:32:14.4998967Z`
+and final table update at `01:32:15.9343598Z`.
+
+The API log group contains a prior GET with request correlation
+`ab897b71-7017-4d37-88b0-f037beb1ae52` while preserving the stored transaction
+correlation. Our subsequent GET explicitly supplied the original correlation
+header and produced another `TransactionApiHandled`, `Operation=Get`,
+`HttpStatus=200`, with that value in both correlation fields.
+
+The API emits parseable application JSON without a second runtime JSON wrapper.
+Its structured identifiers and status are under `State`, as expected for the
+ASP.NET formatter. The inspected application events contained no amount,
+destination account, external reference or idempotency key. Success and GET
+correlation separation are now validated in AWS; POST replay and failure events
+still have local test coverage only for this increment. Owner review and
+infrastructure commit/push remain pending.
