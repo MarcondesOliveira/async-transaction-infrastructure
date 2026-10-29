@@ -1,5 +1,24 @@
 # Stage 12 — Observability, security and resilience
 
+## Operational alarm scope decision — 2026-10-29
+
+The owner decided that custom alarms and operational email notifications are
+unnecessary for this temporary demonstration. The prepared plan was never applied.
+Its Terraform resources, variables, outputs, example settings, ignored email
+configuration, mock tests and saved plan were removed locally. No alarm, custom
+metric filter, operational SNS topic or email subscription was created by this work.
+
+The lab retains structured correlated logs, native service metrics and existing
+DLQs for manual inspection. It does not claim automatic incident notification.
+Custom alarms are a documented future extension, not an unfinished requirement
+for the revised Stage 12 scope. Existing AWS resource charges, logs and the
+previously configured budget alerts are unaffected by this decision.
+
+After removal, Terraform validation passed and a live read-only core plan exited
+with code 0: **no changes**. No alarm resource references remain in the core stack.
+Only this decision record and the README remain changed in the infrastructure
+repository; no infrastructure apply or destroy was necessary.
+
 Status: in progress. The following evidence covers the Request Handler and Callback
 Handler, Transaction API and external simulator observability increments, not completion of the entire stage.
 

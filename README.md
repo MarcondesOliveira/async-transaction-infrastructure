@@ -1,5 +1,10 @@
 # Async Transaction Infrastructure
 
+For this temporary portfolio lab, operational inspection uses structured CloudWatch
+logs, native service metrics and existing DLQs. Custom alarm metrics and operational
+SNS email notifications are intentionally deferred to a future production-oriented
+extension; no automated incident detection is claimed for the current lab.
+
 Terraform infrastructure for the Async Transaction Processing portfolio project.
 
 This repository owns AWS resources only. Application source code is built in independent repositories and supplied as immutable ZIP artifacts.
