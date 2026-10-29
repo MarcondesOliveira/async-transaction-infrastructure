@@ -58,6 +58,13 @@ resource "aws_lambda_function" "callback_handler" {
   memory_size      = 512
   timeout          = 15
 
+  logging_config {
+    log_format            = "JSON"
+    application_log_level = "INFO"
+    system_log_level      = "INFO"
+    log_group             = aws_cloudwatch_log_group.callback_handler.name
+  }
+
   environment {
     variables = {
       DynamoDb__TableName = aws_dynamodb_table.transactions.name

@@ -1,7 +1,7 @@
 # Stage 12 — Observability, security and resilience
 
-Status: in progress. The following evidence covers only the Request Handler
-observability increment, not completion of the entire stage.
+Status: in progress. The following evidence covers the Request Handler and Callback
+Handler observability increments, not completion of the entire stage.
 
 ## Request Handler package and reviewed plan
 
@@ -85,3 +85,68 @@ A subsequent GET returned HTTP `200`, `SUCCEEDED` / `APPROVED`, with processor I
 This validates the success path and correlation in the deployed Request Handler.
 The new failure-log format has local test coverage but has not yet been exercised
 by a new controlled AWS timeout after this deployment.
+
+## Callback Handler package and deployment plan
+
+- Owner-pushed application commit confirmed against GitHub `main`:
+  `596b1e994f97bb1bdf431af0e3c2dbd9df0a960b`; local checkout is clean.
+- Build passed with zero warnings/errors; all 34 tests passed (13 unit,
+  18 integration, 3 contract). Formatting verification passed.
+- Two initial new test assertions incorrectly expected rendered outcome text.
+  After joint review and owner approval, they were corrected to check the
+  template and separately recorded argument used by `TestLambdaLogger`.
+  The correction did not modify application behavior.
+- Framework-dependent Release publish for `net10.0` / `linux-arm64` succeeded.
+- S3 key:
+  `async-transaction-callback-handler/596b1e994f97bb1bdf431af0e3c2dbd9df0a960b/async-transaction-callback-handler.zip`.
+- ZIP SHA-256:
+  `294c451d7f7927906ff94694d5627062ee83904b32e96407c2ba7bfcf009c053`.
+- Lambda Base64 checksum:
+  `KUxFHX95J5Bv+UaU1WJwYu6DkEsy6WQHwrp7/PAJwFM=`.
+- Conditional S3 creation, AES256 encryption and SHA-256 validation succeeded;
+  the returned S3 checksum matches the package.
+- `terraform fmt -check`, `terraform validate` and `git diff --check` passed.
+- Saved plan: `stage12-callback-observability.tfplan`, **0 to add, 1 to change,
+  0 to destroy**. Only the Callback Handler package/hash and logging format/levels
+  change. JSON logging uses the existing log group with application/system `INFO`.
+
+The owner approved the saved Callback Handler plan. Apply succeeded with
+**0 added, 1 changed, 0 destroyed**. The Lambda is `Active`, with update status
+`Successful` and the expected package checksum. JSON application/system `INFO`
+logging was confirmed in `/aws/lambda/async-transaction-processing-dev-callback-handler`.
+The post-apply Terraform plan exited with code 0 and reported no changes.
+Endpoints, IAM, queues, timeouts and other Lambdas were unchanged.
+
+Manual validation of the new callback logs remains pending: create a new
+transaction through the main API and inspect `CallbackHandled` / `Applied` with
+matching identifiers in the callback-handler log group, then verify final state
+through GET. Duplicate/failure-log runtime tests are separate checks and must not
+be claimed as covered by a success-only request.
+
+## Manual success validation — Callback Handler logs
+
+The owner submitted transaction `81658c74-e8ec-4e2e-8715-6cd0fbec01f6` through
+the main API at `2026-10-29T01:18:34.6837336Z`, with correlation ID
+`23456789-2345-4345-8345-234567890123`. The initial response was `PENDING`.
+
+CloudWatch recorded a native JSON application event at `2026-10-29T01:18:46.920Z`:
+
+```json
+{
+  "EventName": "CallbackHandled",
+  "MessageId": "176c8d37-87cd-414d-8046-412ddccd755b",
+  "EventId": "04718ef6-2d02-4ca1-809c-71038b9ae29f",
+  "TransactionId": "81658c74-e8ec-4e2e-8715-6cd0fbec01f6",
+  "CorrelationId": "23456789-2345-4345-8345-234567890123",
+  "ProcessorTransactionId": "4e604996-0a84-4d3d-b868-1e9c99203560",
+  "Outcome": "Applied"
+}
+```
+
+All identifiers and the outcome were top-level JSON fields. The event did not
+contain the raw payload, result message, destination account or amount.
+A GET returned HTTP `200` with `SUCCEEDED` / `APPROVED`, matching the processor
+ID above. Completion time was `01:18:44.1347969Z` and the final table update was
+`01:18:45.6729837Z`. This validates the deployed applied-result logging path;
+the new duplicate and failure log formats remain covered locally, not by this
+manual AWS success test. Infrastructure owner review and commit/push are pending.
