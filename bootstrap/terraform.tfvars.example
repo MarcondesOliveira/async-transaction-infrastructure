@@ -2,6 +2,12 @@ aws_region         = "us-east-1"
 environment        = "dev"
 monthly_budget_usd = 5
 
+# Query each application's actions/oidc/customization/sub endpoint before publishing.
+# Copy its immutable sub_claim_prefix into this map in ignored terraform.tfvars.
+# Example shape: { "example-service" = "repo:example-owner@123/example-service@456" }
+# Unmapped repositories retain the legacy name-based format pending verification.
+github_application_oidc_subject_prefixes = {}
+
 # Set this before the first apply. Leaving it null intentionally skips the budget.
 budget_alert_email = null
 

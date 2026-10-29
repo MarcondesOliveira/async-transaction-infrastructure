@@ -52,6 +52,23 @@ variable "github_owner" {
   default     = "MarcondesOliveira"
 }
 
+variable "github_application_oidc_subject_prefixes" {
+  description = "Verified immutable GitHub OIDC prefixes by application repository; real IDs belong in ignored tfvars. Unmapped repositories retain the legacy format until reviewed."
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for repository, prefix in var.github_application_oidc_subject_prefixes :
+      contains(var.application_repositories, repository) &&
+      can(regex("^repo:[A-Za-z0-9-]+@[0-9]+/[A-Za-z0-9_.-]+@[0-9]+$", prefix)) &&
+      startswith(prefix, "repo:${var.github_owner}@") &&
+      try(split("@", split("/", prefix)[1])[0], "") == repository
+    ])
+    error_message = "Use verified repo:OWNER@ID/REPOSITORY@ID prefixes only for configured application repositories and owner; branches/wildcards are not allowed."
+  }
+}
+
 variable "application_repositories" {
   description = "Repositories allowed to publish immutable deployment artifacts from main."
   type        = set(string)

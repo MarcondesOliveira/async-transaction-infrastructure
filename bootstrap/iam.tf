@@ -13,7 +13,7 @@ locals {
 
   artifact_publisher_subjects = [
     for repository in var.application_repositories :
-    "repo:${var.github_owner}/${repository}:ref:refs/heads/main"
+    "${lookup(var.github_application_oidc_subject_prefixes, repository, "repo:${var.github_owner}/${repository}")}:ref:refs/heads/main"
   ]
 }
 
