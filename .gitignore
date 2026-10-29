@@ -12,3 +12,6 @@ override.tf.json
 *_override.tf.json
 .env
 backend.hcl
+__pycache__/
+*.pyc
+*.tfvars.json

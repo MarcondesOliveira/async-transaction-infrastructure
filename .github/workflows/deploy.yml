@@ -1,0 +1,91 @@
+name: Deploy service
+run-name: ${{ inputs.operation }} ${{ inputs.service }} @ ${{ inputs.source_commit }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: Service owning the published immutable artifact
+        required: true
+        type: choice
+        options:
+          - async-transaction-api
+          - async-transaction-request-handler
+          - async-transaction-callback-handler
+          - external-transaction-processor-simulator
+      source_commit:
+        description: Full commit SHA of the published artifact
+        required: true
+        type: string
+      operation:
+        description: Plan only, or apply and run smoke test
+        required: true
+        default: plan
+        type: choice
+        options: [plan, deploy]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: terraform-${{ inputs.service == 'external-transaction-processor-simulator' && 'external-simulator' || 'core' }}
+      queue: max
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TF_IN_AUTOMATION: 'true'
+      AWS_PAGER: ''
+      SERVICE: ${{ inputs.service }}
+      SOURCE_COMMIT: ${{ inputs.source_commit }}
+      OPERATION: ${{ inputs.operation }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      ARTIFACT_BUCKET: ${{ vars.ARTIFACT_BUCKET }}
+      SMOKE_API_URL: ${{ vars.SMOKE_API_URL }}
+      STACK_CONFIG_JSON: ${{ inputs.service == 'external-transaction-processor-simulator' && secrets.SIMULATOR_CONFIG_JSON || secrets.CORE_CONFIG_JSON }}
+    steps:
+      - name: Checkout infrastructure
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: '1.16.1'
+          terraform_wrapper: false
+      - name: Validate metadata and mask deployment identifiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$OPERATION" == plan || "$OPERATION" == deploy ]]
+          : "${STACK_CONFIG_JSON:?Missing stack configuration secret}"
+          : "${AWS_REGION:?Missing region}"
+          : "${AWS_ACCOUNT_ID:?Missing account}"
+          : "${TF_STATE_BUCKET:?Missing state bucket}"
+          : "${ARTIFACT_BUCKET:?Missing artifact bucket}"
+          : "${SMOKE_API_URL:?Missing smoke endpoint}"
+          echo "::add-mask::$AWS_ACCOUNT_ID"
+          echo "::add-mask::$TF_STATE_BUCKET"
+          echo "::add-mask::$ARTIFACT_BUCKET"
+          echo "::add-mask::$SMOKE_API_URL"
+      - name: Assume Terraform role through OIDC
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0 / Node.js 24
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_TERRAFORM_ROLE_ARN }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          mask-aws-account-id: true
+          unset-current-credentials: true
+          role-session-name: infra-deploy-${{ github.run_id }}
+          role-duration-seconds: 3600
+          retry-max-attempts: 2
+      - name: Plan, enforce code-only changes and optionally deploy
+        run: bash .github/scripts/deploy.sh

@@ -54,6 +54,12 @@ local deployment commands. Infrastructure changes must use its own pipeline.
 That full chain is not implemented or validated yet; existing role definitions
 and successful S3 publication alone do not demonstrate continuous deployment.
 
+The central `Deploy service` workflow is now prepared with plan-only default,
+code-only change guards, per-stack queuing, deployment hash verification and a
+synthetic end-to-end smoke check. `Infrastructure CI` validates configuration
+without AWS access. Both still need their first GitHub execution; automatic
+service dispatch and infrastructure-push apply are not connected yet.
+
 Pipeline work resumes with infrastructure OIDC and a controlled central deployment
 workflow. Publication and deployment permissions remain separate; concurrent
 service changes must be serialized per Terraform stack without losing another
