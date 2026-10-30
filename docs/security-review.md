@@ -1,5 +1,11 @@
 # Stage 12 security review — 2026-10-29
 
+This is a dated audit record: findings and intermediate validation limits below
+refer to that stage. Subsequent automatic OIDC delivery and end-to-end smoke were
+validated in stage 13; see [current delivery](continuous-delivery.md) and the
+[project overview](../README.md). The later optional teardown role is prepared
+separately, not evidence that destructive execution has been validated.
+
 Status: initial audit completed; owner-approved IAM corrections deployed and
 verified with live policy reads, no-drift plans and a successful manual API
 regression. No application source was changed by these corrections. This is

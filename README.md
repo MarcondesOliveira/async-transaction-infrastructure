@@ -5,6 +5,11 @@ receives `202 Accepted`, while messaging coordinates submission to a simulated
 external processor and applies its eventual result. All transfers are synthetic:
 this project does not connect to a bank, payment network or real customer account.
 
+The problem being demonstrated is how to accept work without holding a client
+connection open until an external processor finishes, while handling retries,
+duplicate delivery and conflicting results without silently creating new work or
+overwriting a completed transaction.
+
 This repository is the **entry point for the complete five-repository solution**.
 Application code lives in four independently built/deployed repositories;
 Terraform and central delivery orchestration live here.
@@ -152,6 +157,10 @@ There is no automatic rollback after a failed apply or smoke.
 
 ## Manual demonstration
 
+For a five-minute walkthrough in Swagger or Bruno, follow the
+[short demonstration script](docs/demo.md). It uses the main API, not direct
+Lambda invocations, and separates expected validation errors from failures.
+
 Get your deployment URL from `terraform -chdir=stacks/core output -raw transactions_api_url`.
 Open `<API_BASE_URL>/swagger/index.html`, or use Bruno/curl.
 Send **to the main API**, not to the simulator or callback endpoint:
@@ -207,6 +216,25 @@ core; bootstrap is last and owner-operated. **Both bootstrap buckets have
 objects.** Preserve needed evidence before authorizing it. Never destroy merely
 to demonstrate the CI/CD workflow.
 
+### Possible next steps — not implemented here
+
+- Add caller authentication, webhook verification/replay controls and a reviewed
+  callback-destination allowlist before any untrusted use.
+- Propagate `externalReference` through the Pipe and align independent consumer
+  validation with the intended business contract; today's differences are
+  documented in [contracts](docs/contracts.md).
+- Revisit sequential request batches and timeout budgets for sustained load;
+  this lab demonstrates behavior, not a throughput or latency target.
+- Add durable reconciliation, reviewed recovery/retention policies, tracing and
+  production observability if the operating requirements justify them.
+- Consider a GitHub App instead of a temporary cross-repository token for
+  longer-lived operation. Refresh pinned third-party actions as their runtimes
+  evolve; current deprecation warnings do not invalidate successful runs.
+
+These are future options, not unfinished requirements for the disposable lab.
+There is no claim of production readiness, exactly-once delivery, a security
+certification or a reproduction of an employer's internal implementation.
+
 ## Validation and further reading
 
 Real automatic delivery and synthetic end-to-end smoke passed for all four
@@ -217,6 +245,8 @@ Replaying this guide in a second empty AWS account has not been performed as
 part of documentation work.
 
 - [From-zero reproduction guide](docs/reproduce.md)
+- [Five-minute demonstration](docs/demo.md)
+- [Cross-service contracts and states](docs/contracts.md)
 - [Continuous delivery and OIDC](docs/continuous-delivery.md)
 - [Recovery, retention and logs](docs/lab-operations.md)
 - [Security review](docs/security-review.md)

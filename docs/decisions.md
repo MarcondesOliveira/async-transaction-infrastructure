@@ -1,5 +1,11 @@
 # Infrastructure decisions
 
+This file retains implementation-stage decisions, including historical placeholder
+and pre-simulator setup. For the completed deployment/reproduction path and
+current scope, start with the [project overview](../README.md) and
+[reproduction guide](reproduce.md); do not treat old setup placeholders as live
+configuration or completed CI/CD as still pending.
+
 ## Serverless API
 
 API Gateway HTTP API and Lambda preserve the asynchronous service boundary without the fixed cost or operational overhead of a Kubernetes cluster.
