@@ -60,6 +60,13 @@ regional permission exception in the temporary destroy role, not a claim that
 every auxiliary permission is isolated to one project resource. It grants no
 delivery creation/update, log resource-policy administration or bucket deletion.
 
+Deleting REST API method settings also calls `UpdateStage` to reset those settings
+before stage deletion. The temporary role therefore allows `apigateway:PATCH`
+only on `/restapis/<configured-api-id>/stages/<environment>` for the existing REST
+API IDs in bootstrap inputs. It does not grant PATCH on API roots, HTTP APIs or
+other stages. This permission operates at stage level (not individual PATCH
+fields); the reviewed teardown plan still permits deletion actions only.
+
 OIDC trust is the infrastructure repository's verified main subject and STS
 audience, like the existing infrastructure role. Workflow confirmations are not
 a second independent security boundary against someone allowed to rewrite main.

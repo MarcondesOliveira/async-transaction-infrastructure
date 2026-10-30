@@ -118,6 +118,17 @@ class TeardownTests(unittest.TestCase):
         self.assertNotIn('iam:RemoveRoleFromInstanceProfile', block)
         self.assertNotIn('Resource = "*"', block)
 
+    def test_method_settings_reset_is_limited_to_configured_rest_stages(self):
+        text = (SCRIPTS.parents[1] / "bootstrap/destroy_role.tf").read_text()
+        block = text.split('Sid      = "ResetRestStageMethodSettings"', 1)[1].split('}', 1)[0]
+        self.assertIn('Action   = ["apigateway:PATCH"]', block)
+        self.assertIn('Resource = [for arn in local.rest_api_arns', block)
+        self.assertIn('"${arn}/stages/${var.environment}"', text)
+        self.assertIn('length(local.rest_api_arns) == 0 ? [] : [', text)
+        self.assertNotIn('Resource = "*"', block)
+        self.assertNotIn('http_api_arns', block)
+        self.assertEqual(text.count('"apigateway:PATCH"'), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -64,6 +64,15 @@ resource "aws_iam_role_policy" "destroy_runtime" {
           StringEquals = { "aws:RequestedRegion" = var.aws_region }
         }
       }
+      ], length(local.rest_api_arns) == 0 ? [] : [
+      {
+        # Deleting method settings resets them through UpdateStage before deletion.
+        # Do not allow PATCH on the API root, other stages or HTTP APIs.
+        Sid      = "ResetRestStageMethodSettings"
+        Effect   = "Allow"
+        Action   = ["apigateway:PATCH"]
+        Resource = [for arn in local.rest_api_arns : "${arn}/stages/${var.environment}"]
+      }
     ])
   })
 }
