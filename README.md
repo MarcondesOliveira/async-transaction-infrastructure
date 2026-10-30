@@ -115,6 +115,22 @@ reduces long-lived housekeeping data, and preserves results for demonstration an
 diagnosis. It is a conscious lab tradeoff, not a production retention policy.
 [AWS TTL behavior](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/TTL.html).
 
+**Trade-off and alternatives:** separate deduplication items are not required for
+idempotency. An alternative is to keep the necessary request/event identity and
+processing state in the business item itself, using stable identifiers and atomic
+conditional writes to prevent duplicate effects under concurrency. A preliminary
+read followed by an unconditional write is not an equivalent concurrency guard.
+
+This lab chooses separate items to provide direct lookup by client key, detect
+changed content under the same key/event ID, and expire temporary deduplication
+metadata independently of the retained business result. The price is additional
+storage, read/write requests, transactional operations and conflict-handling logic.
+A typical successful transaction has three items in the main table until temporary
+items are physically removed; the smaller auxiliary items do not imply three times
+the storage. Additional distinct callback events can create further receipts.
+This is an explicit design choice for the demonstrated contract, not a claim that
+three items are mandatory or universally better than single-item idempotency.
+
 ## Reproduction order
 
 The [full guide](docs/reproduce.md) supplies commands, example files, configuration
