@@ -12,8 +12,10 @@ use the infrastructure repository pipeline. Destroy remains separately confirmed
 The service chain has now been validated in all four repositories: automatic
 push, CI/package, publication, central deploy, Lambda verification and synthetic
 smoke, including source-workflow success propagation. Infrastructure-push delivery
-is implemented below but its first GitHub execution is pending. Protected destroy
-remains a separate pending increment. Historical preparation notes below do not
+has been validated with a description-only apply and independent successful
+smokes for both stacks. Protected destroy is now prepared, not executed; see
+[final teardown](final-teardown.md) for stage-15 prerequisites and the separate
+optional role. Historical preparation notes below do not
 override this current status.
 
 ## Runtime infrastructure changes after a main push
@@ -57,7 +59,7 @@ rollback, destroy or second apply on failure. Inspect the per-resource action
 summary and error before proceeding. A deliberate worker disable or integration
 break will fail the end-to-end smoke; that's a real failed delivery, not hidden.
 
-First validation: after the owner pushes, expect `Infrastructure CI` then
+Historical first validation: after the owner pushed, `Infrastructure CI` then
 `Deliver infrastructure`. The initial settings match the existing environment;
 the baseline local plans show no resource changes. A description-only update on
 the main API Lambda is included to demonstrate a real infrastructure apply

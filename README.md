@@ -77,7 +77,10 @@ PRs remain credential-free. No raw state/plan is uploaded as an artifact.
 See [continuous delivery implementation notes](docs/continuous-delivery.md) for
 the cross-repository token setup, deployment rules and current prerequisites.
 
-Destroy remains a separate pending increment, never a push-triggered job.
+`Final lab teardown` is prepared as a manual-only, default-plan workflow; the
+separate optional IAM role remains disabled until explicit owner provisioning.
+See [the final teardown guide](docs/final-teardown.md). Nothing is deleted by
+preparing or pushing this workflow. Destructive execution belongs to stage 15.
 Do not perform teardown until demonstration/evidence is complete and authorized.
 
 ## Repository structure
@@ -201,13 +204,13 @@ application repositories.
 
 ## Destruction
 
-The product stack must be destroyed before the bootstrap because its state and artifacts depend on bootstrap buckets:
-
-```bash
-terraform -chdir=stacks/external-simulator destroy
-terraform -chdir=stacks/core destroy
-terraform -chdir=bootstrap destroy
-```
+Prepare the workflow in stage 13; run teardown only in stage 15 after approval.
+The [final teardown guide](docs/final-teardown.md) describes the delivery freeze,
+reviewed commit, exact confirmation and separate optional role. The manual
+workflow previews by default and destroys simulator before core only when
+explicitly selected. Bootstrap/bucket/version cleanup remains owner-operated
+and last, because stacks depend on its states/artifacts. Ordinary deploy IAM
+permissions are not expanded for teardown.
 
 The final project checklist requires a separate AWS inventory and cost check after destruction.
 

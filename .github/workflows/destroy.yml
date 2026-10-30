@@ -1,0 +1,75 @@
+name: Final lab teardown
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Preview deletions or execute final teardown
+        type: choice
+        required: true
+        default: plan
+        options: [plan, destroy]
+      expected_commit:
+        description: Full current main SHA reviewed for this teardown
+        type: string
+        required: true
+      confirmation:
+        description: For destroy only, type DESTROY followed by project-environment
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+      OPERATION: ${{ inputs.operation }}
+      TEARDOWN_ENABLED: ${{ vars.TEARDOWN_ENABLED }}
+    steps:
+      - name: Require reviewed current commit and successful CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)" = "$EXPECTED_COMMIT"
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$EXPECTED_COMMIT" \
+            --json status,conclusion,headBranch --jq \
+            'any(.[]; .status == "completed" and .conclusion == "success" and .headBranch == "main")' | grep -qx true
+          if [[ "$OPERATION" == destroy ]]; then
+            test "$TEARDOWN_ENABLED" = true
+            gh run list --repo "$GITHUB_REPOSITORY" --limit 100 \
+              --json workflowName,status --jq \
+              '[.[] | select((.workflowName == "Deploy service" or .workflowName == "Deliver infrastructure") and .status != "completed")] | length == 0' | grep -qx true
+          fi
+  simulator:
+    needs: preflight
+    uses: ./.github/workflows/destroy-stack.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      stack: external-simulator
+      operation: ${{ inputs.operation }}
+      expected_commit: ${{ inputs.expected_commit }}
+      confirmation: ${{ inputs.confirmation }}
+    secrets: inherit
+  core:
+    needs: simulator
+    uses: ./.github/workflows/destroy-stack.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      stack: core
+      operation: ${{ inputs.operation }}
+      expected_commit: ${{ inputs.expected_commit }}
+      confirmation: ${{ inputs.confirmation }}
+    secrets: inherit

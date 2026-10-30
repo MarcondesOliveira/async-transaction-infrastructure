@@ -35,3 +35,4 @@ jobs:
         run: |
           bash -n .github/scripts/deploy.sh
           bash -n .github/scripts/infrastructure.sh
+          bash -n .github/scripts/teardown.sh

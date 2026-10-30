@@ -40,6 +40,7 @@ jobs:
       id-token: write
     env:
       TF_IN_AUTOMATION: 'true'
+      TEARDOWN_ENABLED: ${{ vars.TEARDOWN_ENABLED }}
       AWS_PAGER: ''
       SERVICE: ${{ inputs.service }}
       SOURCE_COMMIT: ${{ inputs.source_commit }}
@@ -64,6 +65,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test "$TEARDOWN_ENABLED" != true || { echo 'Delivery frozen for final teardown.' >&2; exit 1; }
           [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           [[ "$OPERATION" == plan || "$OPERATION" == deploy ]]
           : "${STACK_CONFIG_JSON:?Missing stack configuration secret}"
