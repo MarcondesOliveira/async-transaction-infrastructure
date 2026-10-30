@@ -1,219 +1,209 @@
-# Async Transaction Infrastructure
+# Async Transaction Processing
 
-For this temporary portfolio lab, operational inspection uses structured CloudWatch
-logs, native service metrics and existing DLQs. Custom alarm metrics and operational
-SNS email notifications are intentionally deferred to a future production-oriented
-extension; no automated incident detection is claimed for the current lab.
+Independent AWS portfolio lab for asynchronous transaction processing. A client
+receives `202 Accepted`, while messaging coordinates submission to a simulated
+external processor and applies its eventual result. All transfers are synthetic:
+this project does not connect to a bank, payment network or real customer account.
 
-The [Stage 12 security review](docs/security-review.md) records scanner results,
-IAM/configuration findings and the limits of this temporary lab. Open findings
-must not be mistaken for production security approval.
+This repository is the **entry point for the complete five-repository solution**.
+Application code lives in four independently built/deployed repositories;
+Terraform and central delivery orchestration live here.
 
-The [lab operations guide](docs/lab-operations.md) records configuration handling,
-timeout/retention tradeoffs and the manual inspection/recovery procedure for each
-failure queue. Stage 12 adds no custom alarms or production recovery platform.
+**Start here:** [reproduce the lab from scratch](docs/reproduce.md).
+You can also [run a short demonstration](#manual-demonstration) after deployment.
+Repository access is required; documentation does not change repository visibility.
 
-Terraform infrastructure for the Async Transaction Processing portfolio project.
+## Repositories and responsibilities
 
-This repository owns AWS resources only. Application source code is built in independent repositories and supplied as immutable ZIP artifacts.
+| Repository | Responsibility | AWS execution |
+| --- | --- | --- |
+| [async-transaction-api](https://github.com/MarcondesOliveira/async-transaction-api) | Validate, create and query transactions; Swagger/OpenAPI | HTTP API Gateway + Lambda |
+| [async-transaction-request-handler](https://github.com/MarcondesOliveira/async-transaction-request-handler) | Consume requests, submit to the processor and classify submission failures | SQS-triggered Lambda |
+| [async-transaction-callback-handler](https://github.com/MarcondesOliveira/async-transaction-callback-handler) | Apply final results idempotently and prevent conflicting terminal updates | SQS-triggered Lambda |
+| [external-transaction-processor-simulator](https://github.com/MarcondesOliveira/external-transaction-processor-simulator) | Independently accept operations and deliver deterministic asynchronous callbacks | Own HTTP API, two Lambdas, DynamoDB/Stream |
+| [async-transaction-infrastructure](https://github.com/MarcondesOliveira/async-transaction-infrastructure) — this repository | Provision AWS, manage state/permissions and orchestrate routine delivery | Terraform + GitHub Actions/OIDC |
 
-## Current scope
+Four application repositories plus infrastructure, not five independent HTTP
+APIs. Request and Callback Handlers expose no HTTP listener or Swagger.
+No shared deployment-time library couples the services.
 
-The current stage defines:
+## What happens to a transaction
 
-- encrypted and versioned S3 remote state;
-- native S3 state locking;
-- encrypted S3 deployment artifacts with lifecycle cleanup;
-- GitHub Actions authentication through the existing AWS OIDC provider;
-- separate roles for Terraform deployment and artifact publication;
-- optional USD 5 monthly AWS Budget with email alerts;
-- DynamoDB table with TTL and Streams;
-- Transaction API Lambda using managed `dotnet10` on `arm64`;
-- API Gateway HTTP API;
-- CloudWatch log groups and access logs;
-- least-privilege runtime permissions for the Transaction API.
-- encrypted Processing Requests and Failed Requests SQS queues with redrive;
-- EventBridge Pipes routing only `INSERT + PENDING` transaction records;
-- Request Handler Lambda with partial SQS batch failure reporting;
-- least-privilege runtime roles for the Request Handler and EventBridge Pipes.
-- independent external simulator stack with an HTTP API, two Lambdas, its own DynamoDB Stream table and a callback failure destination.
-- regional REST callback API integrated directly with SNS, raw delivery to Processing Results, Failed Results DLQ and the Callback Handler Lambda.
+1. Client calls `POST /transactions` with an `Idempotency-Key`.
+2. Transaction API atomically stores the transaction as `PENDING` and an
+   idempotency record in DynamoDB, then returns `202 Accepted`.
+3. DynamoDB Streams and EventBridge Pipes select only transaction
+   `INSERT + PENDING` records and send a versioned request to SQS.
+4. Request Handler consumes SQS, calls the simulator over HTTPS with an
+   idempotency key and conditionally marks acceptance as `PROCESSING`.
+5. Simulator API stores an independent operation and returns `202`.
+   Its DynamoDB Stream triggers a separate worker; it does not keep work running
+   in the background of an HTTP Lambda after returning.
+6. Worker sends the final event to the callback REST API Gateway.
+   The gateway validates JSON and publishes directly to SNS.
+7. SNS delivers raw JSON to the results SQS queue. Callback Handler atomically
+   records the callback receipt and applies the final transaction state.
+8. Client calls `GET /transactions/{transactionId}` to read the result.
 
-No AWS resource is created by cloning or validating this repository. A successful
-main push can now start the infrastructure delivery workflow, which applies its
-guarded saved plan after CI. Manual workflow dispatch defaults to plan only.
+`PENDING` and `PROCESSING` are transient; `SUCCEEDED`, `REJECTED` and `FAILED`
+are terminal. A valid callback can arrive before the Request Handler's status
+update; it may therefore complete a `PENDING` transaction directly.
+A later acceptance must not overwrite that final result.
 
-## Delivery automation — in progress
+Request/result queues have DLQs and partial-batch failure handling.
+The simulator Stream failure destination stores invocation metadata, not the
+original callback body; it is not an ordinary SQS callback redrive.
+See [operational inspection and recovery](docs/lab-operations.md).
 
-All four service repositories have validated automatic main-push delivery:
-CI → immutable S3 publication → central Terraform deploy → Lambda hash/status
-verification → synthetic end-to-end transaction. Source workflows wait for their
-exact central run and propagate failures. Service plans allow only the selected
-package updates and preserve the other services' deployed packages.
+## Decisions worth examining
 
-`Deliver infrastructure` now handles configuration changes after successful
-`Infrastructure CI` from this repository's main push. It checks out that exact
-validated commit, refuses superseded main commits and processes the two stacks
-with at most one matrix job at a time. It uses the same per-stack concurrency
-groups as service delivery and Terraform backend locks. Its first GitHub execution
-is still pending; local checks are not proof of runner deployment.
+- **Serverless, not Kubernetes:** managed `dotnet10`, ARM64 Lambda ZIPs, HTTP
+  APIs and DynamoDB on-demand keep the demonstration free of always-on cluster,
+  NAT Gateway and provisioned-compute requirements. Usage is still billable.
+- **Separate simulator:** its endpoint, table, roles and repository are independent;
+  the main Request Handler knows its HTTP contract, not its storage implementation.
+  It runs in the same AWS account for this lab, not a separate organization's account.
+- **State-driven dispatch:** persisting the initial transaction produces the
+  Stream event; API code does not independently write to DynamoDB and SQS and risk
+  only one write succeeding. Pipe filtering prevents updates/receipts from looping.
+- **Idempotency rather than exactly-once promises:** delivery/retries can repeat
+  messages and HTTP requests. Stable keys, transactional writes and conditional
+  state transitions make repetition safe within the documented retention limits.
+- **Independent packages, centralized infrastructure:** a service delivery
+  overrides only its own immutable package key/hash. Other deployed versions are
+  read from current Terraform state, not restored from stale local tfvars.
 
-Non-sensitive settings in `.github/config/core.json` and
-`.github/config/external-simulator.json` are the pipeline's operational inputs
-(memory/timeouts, retention, retry settings and simulator options). They override
-the old setting snapshots in configuration secrets; account/backend/endpoint
-values remain outside source. Both service and infrastructure deliveries use these
-settings. Do not edit ignored local tfvars and expect GitHub to see those changes.
+### Why one POST creates two DynamoDB records
 
-Infrastructure plans preserve all current package keys/hashes from state. Only
-allowlisted runtime resource creates/updates are permitted. Deletions, replacements,
-IAM changes, unsupported types, new Lambda functions and Lambda package changes
-are blocked visibly, not silently skipped. IAM/bootstrap provisioning still needs
-owner-operated review and permission; routine CI receives no IAM administration.
-After applying its saved plan, the workflow verifies existing Lambda packages
-and runs a synthetic main-API transaction. A failed check does not auto-roll back.
-PRs remain credential-free. No raw state/plan is uploaded as an artifact.
+`TRANSACTION#<id>` is the business representation; `IDEMPOTENCY#<key>` maps the
+client key and normalized-body hash to that transaction. An atomic write creates
+both, so a retry after a lost HTTP response cannot silently create a second
+transaction. Same key/body replays the original transaction; changed content
+returns `409 IDEMPOTENCY_KEY_REUSED`.
 
-See [continuous delivery implementation notes](docs/continuous-delivery.md) for
-the cross-repository token setup, deployment rules and current prerequisites.
+The Callback Handler later adds `CALLBACK#<eventId>` as a processing receipt.
+It detects repeated events and conflicting event-ID reuse without using the
+transaction itself as an unbounded history of every callback.
 
-`Final lab teardown` is prepared as a manual-only, default-plan workflow; the
-separate optional IAM role remains disabled until explicit owner provisioning.
-See [the final teardown guide](docs/final-teardown.md). Nothing is deleted by
-preparing or pushing this workflow. Destructive execution belongs to stage 15.
-Do not perform teardown until demonstration/evidence is complete and authorized.
+Idempotency records and callback receipts have TTL timestamps at +24 hours.
+**The transaction itself has no TTL.** DynamoDB deletes expired items
+asynchronously, potentially days later; the repositories can still observe those
+records until physical removal. This is not a strict 24-hour key-reuse guarantee.
+The simulator's independent operation has its own configurable TTL (default 24 h).
+This separates temporary deduplication bookkeeping from the business result,
+reduces long-lived housekeeping data, and preserves results for demonstration and
+diagnosis. It is a conscious lab tradeoff, not a production retention policy.
+[AWS TTL behavior](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/TTL.html).
 
-## Repository structure
+## Reproduction order
 
-```text
-bootstrap/
-  Creates remote state, artifact storage, OIDC roles and the cost budget.
-stacks/core/
-  Creates the Transaction API and asynchronous request/result pipelines.
-stacks/external-simulator/
-  Hosts the independent simulator with a separate Terraform state.
-modules/
-  Receives reusable components only after actual repetition exists.
-policies/
-  Reserved for policy checks introduced in the security stage.
+The [full guide](docs/reproduce.md) supplies commands, example files, configuration
+names and checkpoints. Follow it in this order:
+
+1. Obtain/fork the five repositories; run credential-free tests locally.
+2. Configure your own owner/repository references and AWS OIDC provider.
+3. Review/apply bootstrap with an owner identity, retaining its local state.
+4. Build/verify/publish the four initial immutable packages using that owner identity.
+5. Owner-provision the simulator stack, then core pointed at its endpoint.
+6. Narrow routine deploy permissions to the newly created API/mapping IDs.
+7. Configure GitHub variables/secrets and enable automatic delivery.
+8. Validate one service push, one infrastructure push and manual POST/GET.
+9. Finish evidence, then explicitly authorize final teardown.
+
+**First provisioning is not routine delivery.** The routine role intentionally
+cannot create IAM roles or initialize an empty deployment. Do not start a service
+delivery against empty state or use a failed deploy as a bootstrap mechanism.
+For a different GitHub owner, update the central repository constant in each
+service's `.github/scripts/deploy.py` as described in the guide.
+
+## CI/CD after first provisioning
+
+A service main push runs tests/analyzers/audit, packages ARM64, publishes the exact
+verified ZIP to S3 through OIDC and dispatches the central Terraform workflow.
+The source workflow waits for the exact central run through plan/apply, Lambda
+hash/status verification and a synthetic transaction reaching `SUCCEEDED/APPROVED`.
+A successful upload or dispatch alone is not successful delivery.
+
+An infrastructure main push runs credential-free CI, then guarded plan/apply for
+both stacks, preserving current packages and running independent smoke transactions.
+Operational settings are versioned under [`.github/config/`](.github/config/);
+account, backend and endpoint configuration stay outside source.
+Stacks share per-stack concurrency queues and S3 state locks.
+
+Routine delivery rejects IAM changes, deletion/replacement and out-of-scope
+resource actions. Privileged bootstrap/IAM work stays owner-operated.
+There is no automatic rollback after a failed apply or smoke.
+[Workflow details and authentication](docs/continuous-delivery.md).
+
+## Manual demonstration
+
+Get your deployment URL from `terraform -chdir=stacks/core output -raw transactions_api_url`.
+Open `<API_BASE_URL>/swagger/index.html`, or use Bruno/curl.
+Send **to the main API**, not to the simulator or callback endpoint:
+
+```http
+POST /transactions
+Content-Type: application/json
+Idempotency-Key: portfolio-demo-0001
 ```
 
-## Region and cost posture
-
-The temporary development environment uses `us-east-1`. Serverless, on-demand resources were selected to avoid fixed compute cost:
-
-- API Gateway HTTP API;
-- Lambda;
-- DynamoDB on-demand;
-- short CloudWatch Logs retention;
-- no VPC, NAT Gateway, EKS or provisioned capacity.
-
-The infrastructure is designed to be destroyed after the portfolio demonstration.
-
-## Prerequisites
-
-- Terraform 1.14 or newer;
-- AWS CLI authenticated to the intended account;
-- permission to manage S3, IAM roles, AWS Budgets and the serverless services in scope;
-- the GitHub OIDC provider `token.actions.githubusercontent.com` already registered in the AWS account.
-
-No access key or AWS account identifier is stored in this repository.
-
-## 1. Validate the bootstrap
-
-```bash
-terraform -chdir=bootstrap init
-terraform -chdir=bootstrap fmt -check
-terraform -chdir=bootstrap validate
-terraform -chdir=bootstrap plan
+```json
+{
+  "transactionType": "TRANSFER",
+  "amount": { "value": "1.00", "currency": "BRL" },
+  "destination": { "accountId": "portfolio-demo" },
+  "externalReference": "portfolio-demo-0001"
+}
 ```
 
-Before the first apply, copy `bootstrap/terraform.tfvars.example` to a non-versioned `terraform.tfvars` and set `budget_alert_email`. Leaving the value null intentionally skips the budget and its alerts.
+Expect `202` with `transactionId`; poll `GET /transactions/{transactionId}`
+until `SUCCEEDED` with `result.code=APPROVED`. Timing is asynchronous, not guaranteed.
+Repeat the same POST/key/body to observe the same transaction; change the amount
+with that key for `409`. Use a new key for every independent scenario.
 
-## 2. Apply the bootstrap
+Destination prefixes `reject-` and `fail-` produce deterministic terminal results.
+`timeout-` exercises transient submission failures/retries, not a successful
+callback. Inspect logs/DLQs with the [operations guide](docs/lab-operations.md).
+[Main API contract](https://github.com/MarcondesOliveira/async-transaction-api/blob/main/docs/api-contract.md).
 
-Run the bootstrap only after its plan has been reviewed:
+## Limits, costs and teardown
 
-```bash
-terraform -chdir=bootstrap apply
-```
+This is a temporary portfolio lab, not a financial or production-security system.
+Endpoints are public with no caller authentication; callbacks use HTTPS **without
+HMAC**. The simulator accepts a supplied HTTPS callback URL without a destination
+allowlist. Use synthetic data and a controlled short-lived environment only.
+Production needs authentication, webhook verification/replay controls, stricter
+destination/tenant boundaries, monitoring and reviewed recovery/retention policies.
+[Security review and its limits](docs/security-review.md).
 
-The outputs provide the state bucket, artifact bucket and GitHub Actions role ARNs.
+AWS usage, logs/storage and GitHub Actions can incur charges; free-tier coverage
+is not assumed. No EKS, NAT or provisioned concurrency is used. Logs default to
+7 days; artifacts expire after 30 days (noncurrent versions after 7).
+Do not rely on a 30-day-old artifact being available to recreate a Lambda.
+The optional USD 5 budget is an alert, not a spending cap.
+Estimate your own usage with the [AWS calculator](https://calculator.aws/)
+and inspect your GitHub plan's Actions allowance.
 
-## 3. Configure the core backend
+[Final lab teardown](docs/final-teardown.md) is manual-only and defaults to a
+deletion preview. Destruction requires an explicit final authorization, delivery
+freeze, exact confirmation and separately owner-enabled role. Simulator precedes
+core; bootstrap is last and owner-operated. **Both bootstrap buckets have
+`force_destroy=true`: an approved bootstrap destroy may purge their versions and
+objects.** Preserve needed evidence before authorizing it. Never destroy merely
+to demonstrate the CI/CD workflow.
 
-After the bootstrap exists, copy the example and replace the bucket name with the `terraform_state_bucket` output:
+## Validation and further reading
 
-```bash
-cp stacks/core/backend.hcl.example stacks/core/backend.hcl
-terraform -chdir=stacks/core init -backend-config=backend.hcl
-```
+Real automatic delivery and synthetic end-to-end smoke passed for all four
+application repositories and for infrastructure changes; the owner also checked
+the resulting transactions manually. Teardown preparation passed unit tests and
+real deletion previews only: no destructive execution is claimed.
+Replaying this guide in a second empty AWS account has not been performed as
+part of documentation work.
 
-The ignored `backend.hcl` contains no credentials. Authentication uses the AWS credential chain locally and OIDC in GitHub Actions.
-
-## 4. Supply the application artifacts
-
-The Transaction API repository will publish an immutable ZIP with this key format:
-
-```text
-async-transaction-api/<git-sha>/async-transaction-api.zip
-```
-
-The Request Handler uses the equivalent immutable key:
-
-```text
-async-transaction-request-handler/<git-sha>/async-transaction-request-handler.zip
-```
-
-Copy `stacks/core/terraform.tfvars.example` to `stacks/core/terraform.tfvars` and replace both artifact keys and Base64 SHA-256 values before any apply. The defaults in `variables.tf` are deliberate non-deployable planning placeholders.
-
-Until the simulator and callback are deployed, the Request Handler uses reserved
-`.invalid` HTTPS domains. This intentionally produces transient failures so the
-SQS retry and DLQ behavior can be demonstrated without contacting a real system.
-
-## 5. Plan the core stack
-
-```bash
-terraform -chdir=stacks/core fmt -check
-terraform -chdir=stacks/core validate
-terraform -chdir=stacks/core plan -out=core.tfplan
-```
-
-Review the plan before applying. The first core apply belongs to the next project stage.
-
-## Security boundaries
-
-- Application workflows from `main` may publish artifacts only.
-- The applied Stage 12 security change restricts infrastructure OIDC trust to `main`; PR and environment-only subjects are excluded. Verify the repository's actual OIDC subject format before enabling Stage 13 workflows.
-- The routine Terraform role uses project-service permissions instead of `PowerUserAccess`. It can read/use seven existing runtime roles, but cannot create/edit IAM roles or manage its own permissions. Bootstrap and IAM changes remain owner-operated.
-- Existing API Gateway IDs and event-source mapping UUIDs are supplied in ignored bootstrap tfvars. Initial provisioning, replacement APIs/mappings and complete teardown require the owner; update these identifiers after replacement. Routine CI is not an administrator or a bootstrap identity.
-- Runtime access is separate: the Transaction API Lambda can write logs and read/create records only in its DynamoDB table.
-- The Request Handler can consume only Processing Requests and conditionally update only the project table.
-- EventBridge Pipes can read only the transaction Stream and send only to Processing Requests.
-- The simulator API can read/create only simulator operations; its worker can read only that Stream, write its own logs and send failure metadata to its own queue.
-- OIDC removes the need for permanent AWS keys in GitHub.
-
-These security corrections were deployed on 2026-10-29. Both stacks' post-apply
-plans showed no differences, and live IAM policies were checked. A manual API
-POST/GET regression passed with a final SUCCEEDED result and an Applied callback.
-The security review records validation scope
-and remaining limitations; simulated allow/deny results do not prove real
-infrastructure OIDC/deployment. That integration is required but not yet validated;
-application artifact publishing OIDC was validated separately in all four
-application repositories.
-
-## Destruction
-
-Prepare the workflow in stage 13; run teardown only in stage 15 after approval.
-The [final teardown guide](docs/final-teardown.md) describes the delivery freeze,
-reviewed commit, exact confirmation and separate optional role. The manual
-workflow previews by default and destroys simulator before core only when
-explicitly selected. Bootstrap/bucket/version cleanup remains owner-operated
-and last, because stacks depend on its states/artifacts. Ordinary deploy IAM
-permissions are not expanded for teardown.
-
-The final project checklist requires a separate AWS inventory and cost check after destruction.
-
-See [the simulator stack guide](stacks/external-simulator/README.md) for backend setup, artifact configuration, review steps and manual tests. Simulator deployment and core endpoint wiring are separate reviewed changes.
-
-See [the callback pipeline guide](docs/callback-pipeline.md) for the REST/SNS choice, callback acknowledgement, permissions, logging boundary and manual test sequence. Callback Handler deployment requires its own immutable artifact key/hash.
+- [From-zero reproduction guide](docs/reproduce.md)
+- [Continuous delivery and OIDC](docs/continuous-delivery.md)
+- [Recovery, retention and logs](docs/lab-operations.md)
+- [Security review](docs/security-review.md)
+- [Final teardown procedure](docs/final-teardown.md)
+- [Callback REST/SNS integration](docs/callback-pipeline.md)

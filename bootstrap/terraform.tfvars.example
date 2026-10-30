@@ -1,6 +1,11 @@
 aws_region         = "us-east-1"
+github_owner       = "YOUR_GITHUB_LOGIN"
+project_name       = "async-transaction-processing"
 environment        = "dev"
 monthly_budget_usd = 5
+
+# Enable final-teardown IAM only at the explicitly owner-approved final stage.
+enable_destroy_role = false
 
 # Query each application's actions/oidc/customization/sub endpoint before publishing.
 # Copy its immutable sub_claim_prefix into this map in ignored terraform.tfvars.

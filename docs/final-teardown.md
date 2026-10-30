@@ -71,7 +71,10 @@ assumed to exist in this private lab repository.
    evidence, review bucket objects/versions and bootstrap deletion plan, explicitly
    approve cleanup, remove project buckets, budget and GitHub roles including the
    optional destroy role. Do not delete the shared OIDC provider (it is a data
-   source, not owned by this lab). No force-delete/version purge is automated here.
+   source, not owned by this lab). This runtime workflow does not purge buckets.
+   However, bootstrap declares `force_destroy=true` for both project buckets:
+   an owner-approved bootstrap destroy can purge their objects/versions. Preserve
+   required evidence first; versioning does not protect from that apply.
 8. Remove temporary cross-repository token/secrets, revoke the token, inventory
    residual resources/costs and record actual results in the checklist. Leave
    automated delivery disabled after closing the lab so a push cannot recreate it.
