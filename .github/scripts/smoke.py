@@ -23,6 +23,11 @@ def main():
         raise ValueError("Main API health check failed")
     correlation = str(uuid.uuid4())
     key = f"pipeline-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
+    stack = os.environ.get("STACK")
+    if stack:
+        if stack not in {"core", "external-simulator"}:
+            raise ValueError("Invalid smoke stack scope")
+        key += "-" + stack
     body = {"transactionType": "TRANSFER", "amount": {"value": "1.00", "currency": "BRL"},
             "destination": {"accountId": "portfolio-ci-smoke"}, "externalReference": key}
     status, accepted = request(url + "/transactions", "POST", body,

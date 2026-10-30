@@ -1,0 +1,94 @@
+name: Deliver infrastructure
+
+on:
+  workflow_run:
+    workflows: [Infrastructure CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Plan only or deploy existing runtime infrastructure
+        required: true
+        type: choice
+        default: plan
+        options: [plan, deploy]
+
+permissions:
+  contents: read
+
+jobs:
+  deliver:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        stack: [core, external-simulator]
+    concurrency:
+      group: terraform-${{ matrix.stack }}
+      queue: max
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TF_IN_AUTOMATION: 'true'
+      AWS_PAGER: ''
+      GH_TOKEN: ${{ github.token }}
+      STACK: ${{ matrix.stack }}
+      OPERATION: ${{ github.event_name == 'workflow_run' && 'deploy' || inputs.operation }}
+      SOURCE_COMMIT: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      SMOKE_API_URL: ${{ vars.SMOKE_API_URL }}
+      STACK_CONFIG_JSON: ${{ matrix.stack == 'core' && secrets.CORE_CONFIG_JSON || secrets.SIMULATOR_CONFIG_JSON }}
+    steps:
+      - name: Checkout exact validated infrastructure commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+          persist-credentials: false
+      - name: Validate source and mask identifiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)" = "$SOURCE_COMMIT" || {
+            echo 'Superseded infrastructure commit; inspect the newer main delivery.' >&2; exit 1;
+          }
+          : "${STACK_CONFIG_JSON:?Missing stack configuration}"
+          : "${AWS_REGION:?Missing region}"
+          : "${AWS_ACCOUNT_ID:?Missing account}"
+          : "${TF_STATE_BUCKET:?Missing backend}"
+          : "${SMOKE_API_URL:?Missing smoke URL}"
+          echo "::add-mask::$AWS_ACCOUNT_ID"
+          echo "::add-mask::$TF_STATE_BUCKET"
+          echo "::add-mask::$SMOKE_API_URL"
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: '1.16.1'
+          terraform_wrapper: false
+      - name: Assume existing Terraform role through OIDC
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_TERRAFORM_ROLE_ARN }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          mask-aws-account-id: true
+          unset-current-credentials: true
+          role-session-name: infra-config-${{ github.run_id }}
+          role-duration-seconds: 3600
+          retry-max-attempts: 2
+      - name: Plan, enforce safeguards and optionally apply
+        run: bash .github/scripts/infrastructure.sh

@@ -32,4 +32,6 @@ jobs:
       - name: Test deployment safeguards
         run: python3 -m unittest discover -s tests/delivery -v
       - name: Check shell syntax
-        run: bash -n .github/scripts/deploy.sh
+        run: |
+          bash -n .github/scripts/deploy.sh
+          bash -n .github/scripts/infrastructure.sh

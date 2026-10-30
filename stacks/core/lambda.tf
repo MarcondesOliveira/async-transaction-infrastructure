@@ -1,6 +1,6 @@
 resource "aws_lambda_function" "transaction_api" {
   function_name = local.transaction_api
-  description   = "Creates and queries asynchronous portfolio transactions."
+  description   = "Creates and queries asynchronous transactions for the serverless portfolio lab."
   role          = aws_iam_role.transaction_api.arn
 
   runtime       = "dotnet10"

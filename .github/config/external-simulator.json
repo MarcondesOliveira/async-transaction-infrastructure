@@ -1,0 +1,6 @@
+{
+  "operation_retention_hours": 24,
+  "processing_delay_seconds": 2,
+  "worker_trigger_enabled": true,
+  "log_retention_days": 7
+}

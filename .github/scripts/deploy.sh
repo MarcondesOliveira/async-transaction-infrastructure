@@ -21,7 +21,9 @@ case "$SERVICE" in
 esac
 
 workspace="$(mktemp -d "$RUNNER_TEMP/central-delivery.XXXXXX")"
-printf '%s' "$STACK_CONFIG_JSON" > "$workspace/config.json"
+printf '%s' "$STACK_CONFIG_JSON" > "$workspace/base.json"
+python3 .github/scripts/infrastructure.py config "$stack" "$workspace/base.json" \
+  ".github/config/$stack.json" "$workspace/config.json"
 project="$(jq -er '.project_name | select(test("^[a-z0-9-]+$"))' "$workspace/config.json")"
 environment="$(jq -er '.environment | select(test("^[a-z0-9-]+$"))' "$workspace/config.json")"
 test "$(jq -r '.aws_region' "$workspace/config.json")" = "$AWS_REGION"

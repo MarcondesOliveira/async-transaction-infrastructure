@@ -32,6 +32,17 @@ class SmokeTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 smoke.main()
 
+    def test_each_infrastructure_stack_uses_a_new_idempotency_key(self):
+        keys = []
+        for stack in ["core", "external-simulator"]:
+            responses = [(200, {"status": "healthy"}), (202, {"transactionId": self.transaction}),
+                         (200, {"status": "SUCCEEDED", "result": {"code": "APPROVED"}})]
+            with patch.dict(os.environ, dict(self.env, STACK=stack), clear=True), patch.object(
+                    smoke, "request", side_effect=responses) as req:
+                smoke.main()
+            keys.append(req.call_args_list[1].args[3]["Idempotency-Key"])
+        self.assertNotEqual(keys[0], keys[1])
+
     def test_pending_has_bounded_poll_count(self):
         responses = [(200, {"status": "healthy"}), (202, {"transactionId": self.transaction})]
         responses += [(200, {"status": "PENDING"})] * 60

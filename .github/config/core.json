@@ -1,0 +1,9 @@
+{
+  "lambda_memory_mb": 512,
+  "lambda_timeout_seconds": 30,
+  "request_handler_memory_mb": 512,
+  "request_handler_timeout_seconds": 15,
+  "processing_requests_visibility_timeout_seconds": 90,
+  "processing_requests_max_receive_count": 3,
+  "log_retention_days": 7
+}

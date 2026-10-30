@@ -9,11 +9,61 @@ appropriate smoke check. No local command should be needed to finish routine
 delivery. PRs validate without deployment credentials. Infrastructure changes
 use the infrastructure repository pipeline. Destroy remains separately confirmed.
 
-This chain is not complete yet. Existing CI/package jobs and manual publication
-workflows are already validated; publication alone is not deployment. The central
-workflow below passed its first plan-only validation in GitHub; actual deployment
-and service-push integration remain pending. Infrastructure-push apply and destroy automation are still
-separate pending increments; they are not implied by the new static CI workflow.
+The service chain has now been validated in all four repositories: automatic
+push, CI/package, publication, central deploy, Lambda verification and synthetic
+smoke, including source-workflow success propagation. Infrastructure-push delivery
+is implemented below but its first GitHub execution is pending. Protected destroy
+remains a separate pending increment. Historical preparation notes below do not
+override this current status.
+
+## Runtime infrastructure changes after a main push
+
+`Deliver infrastructure` listens for successful `Infrastructure CI` from a push
+to this repository's main, not PRs/forks/failed CI/manual CI. Manual dispatch on
+main supports `plan` (default) and `deploy`. The runner checks out the exact CI
+head commit and rejects it if main has since advanced. Matrix stacks are `core`
+and `external-simulator`, with `max-parallel: 1`. Each job shares its existing
+`terraform-<stack>` concurrency group with service delivery (`queue: max`) and
+uses the backend lock. There is no atomic transaction across stacks: an applied
+first stack is not rolled back if a later stack fails.
+
+Operational values belong in the allowlisted, typed JSON files under
+`.github/config/`. They intentionally override the old non-artifact setting
+snapshots in `CORE_CONFIG_JSON` / `SIMULATOR_CONFIG_JSON`; only infrastructure
+source edits and these tracked settings travel with a push. Region/project/env
+and real endpoints remain configured outside source. Adding a new configurable
+setting requires updating the allowlist/tests deliberately. Service delivery uses
+the same merged settings, so a later code deploy cannot undo a previous setting
+change. Terraform defaults may be overridden by tracked operational settings;
+edit the JSON values to change those settings in the pipeline.
+
+`infrastructure.sh` reads the latest state, preserves every deployed Lambda
+key/hash, generates a saved plan, and checks it before applying. The guard permits
+only creates/updates of known runtime resource types. It rejects deletes and
+replacements, IAM mutations, unsupported resource types, new functions and package
+changes. Thus this is routine runtime delivery, not unrestricted account
+provisioning: IAM/bootstrap and permission expansion remain owner-operated,
+as agreed. Such changes are not automatically applied by this workflow, even
+when committed; runtime IAM diffs fail instead of broadening permissions.
+Existing API/mapping IAM scopes still apply and may reject new resource creation;
+show and review errors rather than granting wildcard access.
+
+After apply, verify every existing function's package/status and run the synthetic
+main-API smoke. Each matrix stack uses a distinct idempotency key, so the second
+smoke creates a fresh transaction rather than reusing the first result.
+State, raw plans and full environment config remain in private
+runner temporary files, not uploaded artifacts. There is no automatic recovery,
+rollback, destroy or second apply on failure. Inspect the per-resource action
+summary and error before proceeding. A deliberate worker disable or integration
+break will fail the end-to-end smoke; that's a real failed delivery, not hidden.
+
+First validation: after the owner pushes, expect `Infrastructure CI` then
+`Deliver infrastructure`. The initial settings match the existing environment;
+the baseline local plans show no resource changes. A description-only update on
+the main API Lambda is included to demonstrate a real infrastructure apply
+without changing application code, capacity or behavior. The workflow will
+validate both stacks and send synthetic test transactions. Inspect runner
+results before claiming actual infrastructure changes are automated/validated.
 
 ## Central service deployment workflow
 
@@ -48,17 +98,20 @@ Backend, account, role, artifact bucket and smoke URL are repository variables:
 `ARTIFACT_BUCKET`, `SMOKE_API_URL`. Stable non-artifact stack settings are stored
 as `CORE_CONFIG_JSON` and `SIMULATOR_CONFIG_JSON` secrets. Snapshots were taken
 from the existing local Terraform variable values, excluding artifact pins;
-update them deliberately when infrastructure configuration changes. Real values
+update identity/endpoint values deliberately when they change. Operational
+settings now come from the tracked JSON files described above. Real values
 remain outside source and raw state/plan files are not uploaded as public artifacts.
 
 `Infrastructure CI` runs on PR/main push and validates formatting, Terraform
 configuration with backend disabled, shell syntax and delivery/smoke safeguards.
 It requires no AWS credentials and never deploys.
 
-First validation after push: dispatch `Deploy service` on main with
+Historical first validation dispatched `Deploy service` on main with
 `service=async-transaction-api`,
 `source_commit=30b253fe88ffb7fb04c493d32687f5e834075199`, `operation=plan`.
-Do not select deploy or repeat already-published S3 writes just to test OIDC.
+Do not reuse this historical artifact for a new deploy or repeat already-published
+S3 writes just to test OIDC. Routine new service versions follow their automatic
+delivery workflows; plan-only diagnostics should use the intended exact commit.
 
 ## Simplest cross-repository authentication for this lab
 

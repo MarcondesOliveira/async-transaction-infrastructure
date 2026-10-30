@@ -39,38 +39,45 @@ The current stage defines:
 - independent external simulator stack with an HTTP API, two Lambdas, its own DynamoDB Stream table and a callback failure destination.
 - regional REST callback API integrated directly with SNS, raw delivery to Processing Results, Failed Results DLQ and the Callback Handler Lambda.
 
-No AWS resource is created by cloning or validating this repository. Creation requires an explicit `terraform apply`.
+No AWS resource is created by cloning or validating this repository. A successful
+main push can now start the infrastructure delivery workflow, which applies its
+guarded saved plan after CI. Manual workflow dispatch defaults to plan only.
 
 ## Delivery automation — in progress
 
-All four application repositories have validated GitHub Actions CI, versioned
-ARM64 Lambda packages and manually dispatched S3 publication through OIDC.
-Publication checks the approved CI run, package identity/checksums and conditional
-S3 writes. It does not update any Lambda or invoke Terraform.
+All four service repositories have validated automatic main-push delivery:
+CI → immutable S3 publication → central Terraform deploy → Lambda hash/status
+verification → synthetic end-to-end transaction. Source workflows wait for their
+exact central run and propagate failures. Service plans allow only the selected
+package updates and preserve the other services' deployed packages.
 
-The required final path is a service push to main followed by CI, packaging,
-artifact publication, infrastructure plan/deploy and smoke verification, without
-local deployment commands. Infrastructure changes must use its own pipeline.
-That full chain is not implemented or validated yet; existing role definitions
-and successful S3 publication alone do not demonstrate continuous deployment.
+`Deliver infrastructure` now handles configuration changes after successful
+`Infrastructure CI` from this repository's main push. It checks out that exact
+validated commit, refuses superseded main commits and processes the two stacks
+with at most one matrix job at a time. It uses the same per-stack concurrency
+groups as service delivery and Terraform backend locks. Its first GitHub execution
+is still pending; local checks are not proof of runner deployment.
 
-The central `Deploy service` workflow is now prepared with plan-only default,
-code-only change guards, per-stack queuing, deployment hash verification and a
-synthetic end-to-end smoke check. `Infrastructure CI` validates configuration
-without AWS access. Both still need their first GitHub execution; automatic
-service dispatch and infrastructure-push apply are not connected yet.
+Non-sensitive settings in `.github/config/core.json` and
+`.github/config/external-simulator.json` are the pipeline's operational inputs
+(memory/timeouts, retention, retry settings and simulator options). They override
+the old setting snapshots in configuration secrets; account/backend/endpoint
+values remain outside source. Both service and infrastructure deliveries use these
+settings. Do not edit ignored local tfvars and expect GitHub to see those changes.
 
-Pipeline work resumes with infrastructure OIDC and a controlled central deployment
-workflow. Publication and deployment permissions remain separate; concurrent
-service changes must be serialized per Terraform stack without losing another
-service's deployed version. PR validation must not receive deployment credentials.
-Secrets stay outside source. Privileged bootstrap/IAM work remains owner-operated
-unless an explicit reviewed permission change is approved.
+Infrastructure plans preserve all current package keys/hashes from state. Only
+allowlisted runtime resource creates/updates are permitted. Deletions, replacements,
+IAM changes, unsupported types, new Lambda functions and Lambda package changes
+are blocked visibly, not silently skipped. IAM/bootstrap provisioning still needs
+owner-operated review and permission; routine CI receives no IAM administration.
+After applying its saved plan, the workflow verifies existing Lambda packages
+and runs a synthetic main-API transaction. A failed check does not auto-roll back.
+PRs remain credential-free. No raw state/plan is uploaded as an artifact.
 
 See [continuous delivery implementation notes](docs/continuous-delivery.md) for
 the cross-repository token setup, deployment rules and current prerequisites.
 
-Destroy is a separate, explicitly confirmed workflow, never a push-triggered job.
+Destroy remains a separate pending increment, never a push-triggered job.
 Do not perform teardown until demonstration/evidence is complete and authorized.
 
 ## Repository structure
