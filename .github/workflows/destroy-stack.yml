@@ -38,7 +38,7 @@ jobs:
       AWS_REGION: ${{ vars.AWS_REGION }}
       AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
-      ROLE_ARN: ${{ inputs.operation == 'destroy' && vars.AWS_DESTROY_ROLE_ARN || vars.AWS_TERRAFORM_ROLE_ARN }}
+      ROLE_ARN: ${{ (inputs.operation == 'destroy' || (vars.TEARDOWN_ENABLED == 'true' && vars.AWS_DESTROY_ROLE_ARN != '')) && vars.AWS_DESTROY_ROLE_ARN || vars.AWS_TERRAFORM_ROLE_ARN }}
       STACK_CONFIG_JSON: ${{ inputs.stack == 'core' && secrets.CORE_CONFIG_JSON || secrets.SIMULATOR_CONFIG_JSON }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6

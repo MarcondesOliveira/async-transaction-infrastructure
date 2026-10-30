@@ -85,6 +85,39 @@ class TeardownTests(unittest.TestCase):
             self.assertIn('test "$TEARDOWN_ENABLED" != true', text)
             self.assertIn("exit 1", text)
 
+    def test_deleted_mapping_polling_is_read_only_and_region_limited(self):
+        text = (SCRIPTS.parents[1] / "bootstrap/destroy_role.tf").read_text()
+        block = text.split('Sid      = "ReadDeletedMappingsInRegion"', 1)[1].split('},', 1)[0]
+        self.assertIn('Action   = ["lambda:GetEventSourceMapping"]', block)
+        self.assertIn('Resource = "*"', block)
+        self.assertIn('"aws:RequestedRegion" = var.aws_region', block)
+        self.assertNotIn('lambda:DeleteEventSourceMapping', block)
+        self.assertNotIn('lambda:UpdateEventSourceMapping', block)
+
+    def test_frozen_preview_uses_configured_teardown_role(self):
+        text = (SCRIPTS.parent / "workflows/destroy-stack.yml").read_text()
+        self.assertIn("inputs.operation == 'destroy' || (vars.TEARDOWN_ENABLED == 'true' && vars.AWS_DESTROY_ROLE_ARN != '')", text)
+        self.assertIn('if [[ "$OPERATION" == plan ]]; then', (SCRIPTS / "teardown.sh").read_text())
+        self.assertIn("Teardown plan only; nothing deleted.", (SCRIPTS / "teardown.sh").read_text())
+
+    def test_legacy_log_delivery_cleanup_has_no_create_or_policy_management(self):
+        text = (SCRIPTS.parents[1] / "bootstrap/destroy_role.tf").read_text()
+        block = text.split('Sid      = "CleanupHttpApiLogDeliveryInRegion"', 1)[1].split('},', 1)[0]
+        for action in ['logs:GetLogDelivery', 'logs:ListLogDeliveries', 'logs:DeleteLogDelivery']:
+            self.assertIn(action, block)
+        self.assertIn('Resource = "*"', block)
+        self.assertIn('"aws:RequestedRegion" = var.aws_region', block)
+        for action in ['logs:CreateLogDelivery', 'logs:UpdateLogDelivery', 'logs:PutResourcePolicy']:
+            self.assertNotIn(action, text)
+
+    def test_iam_delete_precheck_stays_on_runtime_roles(self):
+        text = (SCRIPTS.parents[1] / "bootstrap/destroy_role.tf").read_text()
+        block = text.split('resource "aws_iam_role_policy" "destroy_runtime_iam"', 1)[1].split('\nresource ', 1)[0]
+        self.assertIn('iam:ListInstanceProfilesForRole', block)
+        self.assertIn('Resource = local.runtime_role_arns', block)
+        self.assertNotIn('iam:RemoveRoleFromInstanceProfile', block)
+        self.assertNotIn('Resource = "*"', block)
+
 
 if __name__ == "__main__":
     unittest.main()

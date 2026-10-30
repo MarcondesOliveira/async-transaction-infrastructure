@@ -16,8 +16,11 @@ repositories, state and AWS account. Deleting tables/queues/logs and purging
 bucket versions cannot be undone by rerunning Terraform.
 
 No resource should be deleted during CI/CD preparation or documentation. This
-workflow is manual-only. Its default `plan` operation previews deletions using
-the existing deploy role and never applies. `destroy` uses a separate, optional
+workflow is manual-only. Its default `plan` operation previews deletions and
+never applies. Before freeze/role setup, it uses the existing deploy role. When
+`TEARDOWN_ENABLED=true` and the destroy role is configured, a preview uses that
+role too, including for recovery reads after partial deletion.
+`destroy` uses a separate, optional
 role which has not been provisioned by preparing these files.
 
 ## Protection boundaries
@@ -45,6 +48,17 @@ the seven runtime roles, and state/lock access plus artifact read. It has no IAM
 create/update/grant permissions, bucket teardown, bootstrap-role deletion or
 account-wide administrator policy. Existing API IDs/mapping UUIDs still bound
 its runtime scope. No new permissions are attached to the routine deploy role.
+
+Auxiliary teardown permissions include `iam:ListInstanceProfilesForRole` on the
+seven runtime roles, needed before the provider deletes them. Deleted-mapping
+polling also needs `lambda:GetEventSourceMapping` on `*`, limited by
+`aws:RequestedRegion`; mutation remains scoped to the configured mapping UUIDs.
+HTTP API stage removal needs legacy `logs:GetLogDelivery`, `logs:ListLogDeliveries`
+and `logs:DeleteLogDelivery`. Those permission-only actions have no resource-level
+ARN scope, so they use `*` with the same region restriction. This is a deliberate
+regional permission exception in the temporary destroy role, not a claim that
+every auxiliary permission is isolated to one project resource. It grants no
+delivery creation/update, log resource-policy administration or bucket deletion.
 
 OIDC trust is the infrastructure repository's verified main subject and STS
 audience, like the existing infrastructure role. Workflow confirmations are not
@@ -199,8 +213,11 @@ In **your infrastructure repository**:
 | `confirmation` | Leave empty |
 
 The preview can also run **before steps 2–3**: it uses the existing deploy role
-and does not require freeze or a destroy role. Neither preview order authorizes
-later deletion. In the **local terminal**, this is the equivalent entry point:
+and does not require freeze or a destroy role. After freeze and role setup, it
+uses the configured teardown role instead, without applying the plan. This
+supports reads of already-deleted mappings during recovery without broadening
+routine deployment permissions. Neither preview order authorizes later deletion.
+In the **local terminal**, this is the equivalent entry point:
 
 ```bash
 gh workflow run destroy.yml --repo "$LAB_REPOSITORY" --ref main \
@@ -256,6 +273,17 @@ is no automatic rollback/retry after failure. Core is skipped if simulator fails
 Keep the freeze, inspect logs/state and approve recovery instead of switching
 back to deploy or blindly rerunning. Teardown permissions/actual removal are not
 proven by a successful preview alone.
+
+If an apply fails with `AccessDenied`, keep the freeze and first distinguish
+the delete call from a provider precheck or post-delete polling call. A resource
+may already be gone while its address remains in state. Inspect AWS and the
+current state read-only; do not remove addresses manually or recreate deleted
+services. Review the smallest necessary owner-side IAM correction, its saved
+plan and approval separately; then publish/review the current source SHA, run a
+new preview and explicitly approve recovery of the remaining runtime. Never
+assume a role that passed a read-only preview has exercised all delete-time
+dependencies. Additional unexpected denials must be investigated, not replaced
+with administrator access or an automatic retry loop.
 
 ## 6. Verify runtime removal, then clean bootstrap LAST
 
@@ -325,3 +353,5 @@ require explicit owner approval at that final stage.
 - [Run a workflow manually](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
 - [Disable and enable workflows](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows)
 - [GitHub CLI: workflow run and inputs](https://cli.github.com/manual/gh_workflow_run)
+- [CloudWatch Logs permission-only actions and resource scopes](https://docs.aws.amazon.com/service-authorization/latest/reference/list_logs.html)
+- [HTTP API logging permissions](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-logging.html)

@@ -40,8 +40,31 @@ resource "aws_iam_role_policy" "destroy_runtime" {
   name  = "destroy-project-runtime"
   role  = aws_iam_role.destroyer[0].id
   policy = jsonencode({
-    Version   = "2012-10-17"
-    Statement = local.destroy_runtime_statements
+    Version = "2012-10-17"
+    Statement = concat(local.destroy_runtime_statements, [
+      {
+        # A deleted mapping no longer resolves to its ARN during provider polling.
+        # Keep mutation permissions on the existing explicit mapping UUIDs.
+        Sid      = "ReadDeletedMappingsInRegion"
+        Effect   = "Allow"
+        Action   = ["lambda:GetEventSourceMapping"]
+        Resource = "*"
+        Condition = {
+          StringEquals = { "aws:RequestedRegion" = var.aws_region }
+        }
+      },
+      {
+        # Legacy HTTP API log-delivery permission-only actions have no ARN scope.
+        # No create/update delivery or resource-policy permission is granted.
+        Sid      = "CleanupHttpApiLogDeliveryInRegion"
+        Effect   = "Allow"
+        Action   = ["logs:GetLogDelivery", "logs:ListLogDeliveries", "logs:DeleteLogDelivery"]
+        Resource = "*"
+        Condition = {
+          StringEquals = { "aws:RequestedRegion" = var.aws_region }
+        }
+      }
+    ])
   })
 }
 
@@ -55,7 +78,7 @@ resource "aws_iam_role_policy" "destroy_runtime_iam" {
       Effect = "Allow"
       Action = [
         "iam:GetRole", "iam:GetRolePolicy", "iam:ListAttachedRolePolicies",
-        "iam:ListRolePolicies", "iam:ListRoleTags", "iam:DeleteRole",
+        "iam:ListRolePolicies", "iam:ListRoleTags", "iam:ListInstanceProfilesForRole", "iam:DeleteRole",
         "iam:DeleteRolePolicy", "iam:DetachRolePolicy"
       ]
       Resource = local.runtime_role_arns
