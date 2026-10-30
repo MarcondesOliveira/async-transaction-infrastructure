@@ -1,4 +1,19 @@
-# Final lab teardown — prepare in stage 13, execute only in stage 15
+# Final lab teardown — visitor runbook
+
+[Project overview](../README.md) · [Full reproduction guide](reproduce.md)
+
+**Where do I run this?** Runtime deletion starts in **your GitHub infrastructure
+repository → Actions → Final lab teardown → Run workflow**. GitHub's runner
+executes Terraform; you do not need this chat or an assistant to start it.
+Preparing its restricted IAM role and deleting bootstrap afterward are separate
+commands in **your local terminal, at the root of your infrastructure checkout**.
+The detailed sequence and optional GitHub CLI equivalents are below.
+
+This is an end-of-lab procedure, not part of initial deployment. Do not copy/run
+all blocks as one script: previews, IAM provisioning, runtime deletion and final
+bucket cleanup have separate review/approval gates. Examples target **your own**
+repositories, state and AWS account. Deleting tables/queues/logs and purging
+bucket versions cannot be undone by rerunning Terraform.
 
 No resource should be deleted during CI/CD preparation or documentation. This
 workflow is manual-only. Its default `plan` operation previews deletions using
@@ -38,46 +53,265 @@ Provision the privileged teardown role only for the final window, then remove
 it with bootstrap cleanup. No additional GitHub environment/reviewer feature is
 assumed to exist in this private lab repository.
 
-## Stage 15 owner procedure — not to run now
+## 1. Preserve evidence and identify your deployment
 
-1. Finish portfolio evidence/documentation. Preserve any data needed before
-   deleting tables, queues and logs; their deletion is destructive. Stop manual
-   traffic and producers. Do not treat retained S3 state versions as data backups.
-2. Disable automatic delivery workflows in the four service repositories and
-   `Deliver infrastructure`; set infrastructure `TEARDOWN_ENABLED=true`.
-   Wait for all running/queued deliveries to finish or be deliberately cancelled.
-   The preflight checks recent active infrastructure delivery runs too, but that
-   check is not a substitute for inspecting all queues and stopping producers.
-   Never reset the freeze while teardown is incomplete.
-3. As owner, set `enable_destroy_role=true` in ignored bootstrap tfvars, review a
-   bootstrap plan, approve it and apply the saved plan. Configure infrastructure
-   variable `AWS_DESTROY_ROLE_ARN` from its output; never put the ARN/account in
-   tracked source. Persist the enabled value until final cleanup; a later
-   bootstrap apply with the default false would remove this role.
-4. Open **Final lab teardown**, select main, supply its reviewed full SHA and
-   choose **plan** first. Inspect the resource-address list for both stacks.
-   Preview uses the read permissions of the existing deploy role.
-5. Only after explicit final owner approval, run it again with **destroy**,
-   the reviewed current main SHA and the exact confirmation phrase. A new saved
-   deletion plan is generated in that execution; it is not the previous preview's
-   binary plan. Its deletion-only guard must pass before apply. Role runtime
-   permissions and actual deletion behavior remain untested until this authorized
-   final execution; don't claim otherwise from dry-run success.
-6. Inspect both jobs and inventory AWS. A partial failure is not rolled back or
-   silently retried. Keep the freeze, inspect errors/state and authorize recovery.
-   Core does not start if simulator fails. Repeating teardown uses the remaining
-   state; never switch back to deploy to "fix" a partially destroyed stack.
-7. Bootstrap is a separate privileged owner step, LAST: preserve needed state
-   evidence, review bucket objects/versions and bootstrap deletion plan, explicitly
-   approve cleanup, remove project buckets, budget and GitHub roles including the
-   optional destroy role. Do not delete the shared OIDC provider (it is a data
-   source, not owned by this lab). This runtime workflow does not purge buckets.
-   However, bootstrap declares `force_destroy=true` for both project buckets:
-   an owner-approved bootstrap destroy can purge their objects/versions. Preserve
-   required evidence first; versioning does not protect from that apply.
-8. Remove temporary cross-repository token/secrets, revoke the token, inventory
-   residual resources/costs and record actual results in the checklist. Leave
-   automated delivery disabled after closing the lab so a push cannot recreate it.
+Keep required diagrams, source commits, Actions run links/results and synthetic
+transaction evidence. Export any table data/logs you need **before deletion** to
+approved private storage, not Git. Remote state versions are not application-data
+backups. Stop manual API requests, external producers and client test loops.
+
+Prerequisites: the existing deployment from the [reproduction guide](reproduce.md),
+GitHub access to manage Actions/variables, GitHub CLI authentication, Terraform,
+AWS CLI and owner-approved AWS credentials for the IAM/bootstrap steps. Retain
+the original ignored bootstrap `terraform.tfvars` and local `terraform.tfstate`,
+plus the runtime backend files. A fresh clone without that state is not enough
+to safely remove the original bootstrap; do not initialize an unrelated account
+or import/recreate resources to work around missing state.
+
+**Local terminal:** replace all placeholder values, enter your checkout, and set
+these variables for this session. Adjust project/environment/region if your
+deployment used different values; they must match its configuration.
+
+```bash
+set -euo pipefail
+cd /path/to/your/async-transaction-infrastructure
+export LAB_OWNER=YOUR_GITHUB_LOGIN
+export LAB_REPOSITORY="$LAB_OWNER/async-transaction-infrastructure"
+export LAB_PROJECT=async-transaction-processing
+export LAB_ENVIRONMENT=dev
+export AWS_PROFILE=YOUR_LAB_PROFILE
+export AWS_REGION=us-east-1
+gh auth status
+aws sts get-caller-identity
+git status --short
+test -z "$(git status --porcelain)"
+export LAB_TEARDOWN_SHA="$(gh api "repos/$LAB_REPOSITORY/commits/main" --jq .sha)"
+test "$(git rev-parse HEAD)" = "$LAB_TEARDOWN_SHA"
+gh run list --repo "$LAB_REPOSITORY" --workflow ci.yml --commit "$LAB_TEARDOWN_SHA"
+```
+
+Check the returned AWS account yourself; do not publish it. Require a clean
+checkout matching the reviewed remote main SHA and a successful Infrastructure CI
+for that exact SHA. If local/remote differ, stop and update/review your checkout
+without overwriting local state/configuration. If you push another change later,
+refresh/review the SHA, wait for its CI and regenerate the deletion preview.
+
+## 2. Freeze automatic delivery and drain active runs
+
+**GitHub interface, in each of your four application repositories:**
+open **Actions → Deliver API / Deliver Request Handler / Deliver Callback Handler /
+Deliver Simulator** (the corresponding name in that repository), then the
+workflow's **… menu → Disable workflow**. In infrastructure, disable
+**Actions → Deliver infrastructure**. Leave **Infrastructure CI** and
+**Final lab teardown** enabled. **Teardown stack helper** is an internal reusable
+workflow; do not try to launch it directly. **Deploy service** is not the teardown
+entry point; the freeze below prevents routine deployment through that path too.
+
+In infrastructure, open **Settings → Secrets and variables → Actions → Variables
+→ New repository variable** (or edit the existing variable):
+
+| Name | Value |
+| --- | --- |
+| `TEARDOWN_ENABLED` | `true` |
+
+**Alternative, local terminal:** these commands perform the same freeze; do not
+repeat them if you already used the interface.
+
+```bash
+for repository in async-transaction-api async-transaction-request-handler async-transaction-callback-handler external-transaction-processor-simulator; do
+  gh workflow disable publish.yml --repo "$LAB_OWNER/$repository"
+done
+gh workflow disable infrastructure.yml --repo "$LAB_REPOSITORY"
+gh variable set TEARDOWN_ENABLED --repo "$LAB_REPOSITORY" --body true
+```
+
+In **Actions**, inspect all five repositories for running, queued or waiting
+deliveries. Wait for them to finish or deliberately cancel them after inspection.
+Disabling a workflow does not cancel already started runs. A recent-run listing
+is useful, but is not proof that an older waiting run does not exist:
+
+```bash
+for repository in async-transaction-api async-transaction-request-handler async-transaction-callback-handler external-transaction-processor-simulator async-transaction-infrastructure; do
+  gh run list --repo "$LAB_OWNER/$repository" --limit 100
+done
+```
+
+Stop producers and wait for in-flight processing; do not receive/purge/redrive
+messages just to make counts zero. Never unfreeze delivery during partial teardown.
+
+## 3. Owner-provision the restricted teardown role
+
+**Local terminal / editor:** edit your existing ignored
+`bootstrap/terraform.tfvars`, changing only `enable_destroy_role = true`. Keep
+your verified OIDC subjects, resource-ID scopes and other deployment inputs.
+Do not replace the file with the example or put account values into source.
+
+Generate and inspect a saved plan with your owner identity:
+
+```bash
+terraform -chdir=bootstrap init
+terraform -chdir=bootstrap validate
+terraform -chdir=bootstrap plan -out=final-teardown-role.tfplan
+terraform -chdir=bootstrap show -no-color final-teardown-role.tfplan
+```
+
+For the first enablement, the expected change is the separate destroy role and
+its three inline policies. If the plan changes existing roles, buckets or other
+resources unexpectedly, stop and investigate; do not approve unrelated drift.
+The routine deploy role remains unchanged. State and plans are private local
+files covered by ignore rules, not files to attach to a public issue.
+
+**Only after approving that IAM plan**, apply exactly it:
+
+```bash
+terraform -chdir=bootstrap apply final-teardown-role.tfplan
+terraform -chdir=bootstrap output -raw terraform_destroyer_role_arn
+```
+
+Copy the output locally into infrastructure **Settings → Secrets and variables
+→ Actions → Variables → New repository variable**, name `AWS_DESTROY_ROLE_ARN`.
+Alternatively, set the value without printing it:
+
+```bash
+gh variable set AWS_DESTROY_ROLE_ARN --repo "$LAB_REPOSITORY" \
+  --body "$(terraform -chdir=bootstrap output -raw terraform_destroyer_role_arn)"
+```
+
+This is the optional destroy role, not `AWS_TERRAFORM_ROLE_ARN`. Keep
+`enable_destroy_role=true` in local inputs until final bootstrap cleanup, or a
+later bootstrap apply could remove it prematurely.
+
+## 4. Preview runtime deletion in GitHub Actions
+
+In **your infrastructure repository**:
+
+1. Open the **Actions** tab.
+2. Select **Final lab teardown** in the workflow list on the left.
+3. Click **Run workflow** on the right. If missing, verify the workflow exists on
+   your default branch, is enabled and you have sufficient repository permissions.
+4. Fill the form below and click the second **Run workflow** button to submit.
+
+| Field | Preview value |
+| --- | --- |
+| Use workflow from / branch | `main` |
+| `operation` | `plan` |
+| `expected_commit` | Your full reviewed 40-character `LAB_TEARDOWN_SHA`, not the author's SHA |
+| `confirmation` | Leave empty |
+
+The preview can also run **before steps 2–3**: it uses the existing deploy role
+and does not require freeze or a destroy role. Neither preview order authorizes
+later deletion. In the **local terminal**, this is the equivalent entry point:
+
+```bash
+gh workflow run destroy.yml --repo "$LAB_REPOSITORY" --ref main \
+  -f operation=plan -f expected_commit="$LAB_TEARDOWN_SHA"
+gh run list --repo "$LAB_REPOSITORY" --workflow destroy.yml --limit 5
+```
+
+Open the newly created run, checking its SHA, operation, time and actor rather
+than assuming another concurrent run is yours. Read **Summary** and the jobs
+**simulator / teardown** followed by **core / teardown**, specifically
+**Generate deletion-only plan and optionally apply the saved plan**.
+Each must show `resourcesToDelete` and **`Teardown plan only; nothing deleted.`**
+For a known run ID, `gh run view YOUR_RUN_ID --repo "$LAB_REPOSITORY"` shows status.
+The label “optionally apply” names a shared step; `operation=plan` never applies.
+
+Review the addresses against your lab. Runtime deletion covers APIs, Lambdas,
+tables, messaging, mappings, log groups and runtime IAM; the exact resource count
+depends on the deployed revision. Bootstrap buckets/budget/GitHub roles and the
+shared OIDC provider are not runtime targets. Stop on unexpected resources or
+any failure. A preview does not export table contents or preserve logs for you.
+
+## 5. Execute runtime deletion — explicit final approval required
+
+**This step deletes runtime data and endpoints.** Require the reviewed preview,
+preserved evidence, stopped traffic/producers, disabled delivery, drained active
+runs, `TEARDOWN_ENABLED=true` and configured `AWS_DESTROY_ROLE_ARN` first.
+
+Repeat **Actions → Final lab teardown → Run workflow**, branch `main`:
+
+| Field | Destructive value |
+| --- | --- |
+| `operation` | `destroy` |
+| `expected_commit` | Same reviewed current main SHA; refresh/review if it changed |
+| `confirmation` | `DESTROY <project>-<environment>` exactly |
+
+For the unchanged example project, confirmation is
+`DESTROY async-transaction-processing-dev`. It is a safety phrase, not a token.
+For your configured values, inspect `printf 'DESTROY %s-%s\n' "$LAB_PROJECT" "$LAB_ENVIRONMENT"`
+locally and verify it matches both stack configurations.
+
+**CLI alternative, only after the same explicit approval:**
+
+```bash
+gh workflow run destroy.yml --repo "$LAB_REPOSITORY" --ref main \
+  -f operation=destroy -f expected_commit="$LAB_TEARDOWN_SHA" \
+  -f confirmation="DESTROY $LAB_PROJECT-$LAB_ENVIRONMENT"
+```
+
+Do not run both the UI and CLI versions. The workflow generates a **fresh** saved
+deletion plan, validates it and applies that exact plan; it does not reuse the
+earlier preview's binary file. Simulator must finish before core starts. There
+is no automatic rollback/retry after failure. Core is skipped if simulator fails.
+Keep the freeze, inspect logs/state and approve recovery instead of switching
+back to deploy or blindly rerunning. Teardown permissions/actual removal are not
+proven by a successful preview alone.
+
+## 6. Verify runtime removal, then clean bootstrap LAST
+
+In the completed run, both stack jobs must report
+**`Stack state has no remaining managed resources; final AWS inventory is still required.`**
+Check the intended AWS account/region in the console for the project APIs,
+Lambdas, Pipes, SQS/SNS, tables, mappings, logs and runtime roles. Do not send a
+smoke POST after deletion. Empty Terraform state is not proof that manually
+created/untracked resources are absent.
+
+Only after runtime is removed, preserve required remote state history and package
+evidence privately. Inspect both project S3 buckets, including versions and delete
+markers. **Both have `force_destroy=true`; approving bootstrap removal can purge
+all their objects/versions. Versioning does not protect against that apply.**
+Do not remove the buckets/state while either runtime stack remains managed.
+
+**Local terminal, still at the infrastructure root with your original bootstrap
+state and owner credentials:** generate a separate final plan:
+
+```bash
+terraform -chdir=bootstrap plan -destroy -out=final-bootstrap-destroy.tfplan
+terraform -chdir=bootstrap show -no-color final-bootstrap-destroy.tfplan
+```
+
+Review scope: project buckets/configuration, optional budget, GitHub publisher/
+deployer roles and optional destroy role/policies. **Do not delete the shared
+OIDC provider:** this configuration reads it as data, not an owned resource.
+If scope differs or state is missing, stop. **Only after separate approval of
+the bucket purge and bootstrap removal**, apply the saved plan:
+
+```bash
+terraform -chdir=bootstrap apply final-bootstrap-destroy.tfplan
+terraform -chdir=bootstrap state list
+```
+
+No managed addresses should remain in bootstrap state. Retain any required local
+state/plan evidence securely; do not commit it. This owner-operated step is not
+part of the GitHub runtime workflow and does not run automatically.
+
+## 7. Revoke temporary access and check residual costs
+
+In each application's **Settings → Secrets and variables → Actions → Secrets**,
+remove this lab's `INFRA_WORKFLOW_TOKEN`. In your GitHub account **Settings →
+Developer settings → Personal access tokens → Fine-grained tokens**, revoke the
+specific temporary token used for this lab. Do not revoke unrelated tokens.
+
+Remove obsolete lab-only repository variables/secrets after preserving approved
+reproduction information privately; do not copy tokens into evidence. Leave
+delivery workflows disabled and the freeze in place after closure. CI may remain
+enabled for code checks; a push must not recreate runtime.
+
+Inspect AWS inventory and Billing/Cost Explorer for residual project resources
+and charges. Billing data can lag; a zero balance is not an immediate deletion
+test and prior usage can still be charged. Record actual removed resources,
+failures/recovery, remaining items and verification time in your own closeout
+notes. Source repositories and diagrams are not deleted by this procedure.
 
 ## Validation status
 
@@ -85,3 +319,9 @@ Preparation validates tests, syntax and Terraform plans only. It does not prove
 resource deletion or grant permission to execute stage 15. Provisioning the
 optional role, configuring its GitHub variable and the destructive execution
 require explicit owner approval at that final stage.
+
+## GitHub interface and CLI references
+
+- [Run a workflow manually](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
+- [Disable and enable workflows](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows)
+- [GitHub CLI: workflow run and inputs](https://cli.github.com/manual/gh_workflow_run)

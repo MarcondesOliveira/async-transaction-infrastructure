@@ -232,6 +232,13 @@ core; bootstrap is last and owner-operated. **Both bootstrap buckets have
 objects.** Preserve needed evidence before authorizing it. Never destroy merely
 to demonstrate the CI/CD workflow.
 
+**Where to start cleanup:** in **your infrastructure repository → Actions →
+Final lab teardown → Run workflow**, select `main` and `operation=plan` first.
+The [visitor teardown runbook](docs/final-teardown.md) lists the exact form fields,
+GitHub CLI alternatives, local role-preparation commands and separate bootstrap
+cleanup. Do not launch `Teardown stack helper` directly or infer that a green
+preview has deleted the lab.
+
 ### Possible next steps — not implemented here
 
 - Add caller authentication, webhook verification/replay controls and a reviewed

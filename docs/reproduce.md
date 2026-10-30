@@ -354,3 +354,10 @@ and a separately enabled role; simulator precedes core and bootstrap is last.
 can purge objects and versions.** Preserve evidence/states first. Inventory
 residual resources/costs, revoke the temporary token and leave delivery disabled
 after closure so later pushes cannot recreate runtime.
+
+The execution entry point is **your infrastructure repository → Actions →
+Final lab teardown → Run workflow**, initially with `operation=plan`. The
+[teardown runbook](final-teardown.md) supplies every input and the equivalent
+`gh workflow run destroy.yml` commands, plus local owner commands for role
+preparation and final bootstrap removal. Runtime Terraform runs on GitHub's
+runner; bootstrap/IAM work runs from your local infrastructure checkout.
