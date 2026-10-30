@@ -29,6 +29,19 @@ Four application repositories plus infrastructure, not five independent HTTP
 APIs. Request and Callback Handlers expose no HTTP listener or Swagger.
 No shared deployment-time library couples the services.
 
+## Architecture
+
+![AWS asynchronous transaction architecture: API, DynamoDB Stream, Pipes, request queue and handler, independent processor, callback gateway, SNS, result queue and handler, with request/result DLQs.](docs/architecture/async-transaction-processing.drawio.png)
+
+[Open the full-resolution diagram](docs/architecture/async-transaction-processing.drawio.png).
+The PNG embeds its editable draw.io source; open it in draw.io to inspect or edit.
+This is a logical overview: the simulated external system is a separate stack in
+the same AWS account. Its internal HTTP API, two Lambdas, table/Stream and worker
+failure destination are described in the
+[simulator repository](https://github.com/MarcondesOliveira/external-transaction-processor-simulator).
+For exact payloads, acknowledgements and state rules, see
+[contracts and state transitions](docs/contracts.md).
+
 ## What happens to a transaction
 
 1. Client calls `POST /transactions` with an `Idempotency-Key`.
