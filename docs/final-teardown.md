@@ -350,10 +350,40 @@ notes. Source repositories and diagrams are not deleted by this procedure.
 
 ## Validation status
 
-Preparation validates tests, syntax and Terraform plans only. It does not prove
-resource deletion or grant permission to execute stage 15. Provisioning the
-optional role, configuring its GitHub variable and the destructive execution
-require explicit owner approval at that final stage.
+The author's AWS lab was removed on **2026-10-30** after explicit owner approvals:
+
+- Runtime teardown completed in simulator → core order. The
+  [successful final runtime run](https://github.com/MarcondesOliveira/async-transaction-infrastructure/actions/runs/41084698506)
+  confirmed both stacks had no remaining managed resources.
+- Earlier attempts partially deleted resources before encountering provider
+  cleanup permission denials. Recovery kept delivery frozen, inspected the
+  remaining state/resources, and applied separately reviewed, minimal corrections
+  to the teardown role for polling/prechecks, log delivery and REST stage reset.
+  Fresh previews and explicit approvals preceded destructive resumptions; there
+  was no automatic retry, rollback or recreation of the deleted application.
+- All S3 object versions of deployment packages and remote states, plus
+  delete-marker metadata, were copied and verified privately before bootstrap
+  removal. Those files contain private infrastructure information and are not
+  repository assets or application-table/log backups.
+- A separately reviewed owner-operated plan removed **20 bootstrap resources**:
+  both buckets and their contents/configuration, three GitHub roles, seven inline
+  policies and the project budget. The local bootstrap state ended without managed
+  instances. The shared GitHub OIDC provider was preserved.
+- Post-removal AWS reads confirmed no matching project APIs, Lambda functions or
+  mappings, Pipes, DynamoDB tables, SQS queues, SNS topics, log groups, alarms or
+  runtime roles in the reviewed prefixes/region. The two buckets, bootstrap roles
+  and budget were also confirmed absent. Verification completed around
+  **2026-10-30 16:36 UTC**; this is not an account-wide inventory or billing audit.
+- Delivery workflows remain disabled and the freeze remains enabled. The four
+  application `INFRA_WORKFLOW_TOKEN` secrets were removed and their absence
+  verified. Account-level token revocation and delayed billing remain separate
+  owner checks, not consequences proven by successful Terraform deletion.
+
+These results describe the author's lab, not a second-account reproduction or a
+production certification. A preview alone still does not prove deletion or
+authorize it: visitors must review and explicitly approve their own IAM changes,
+runtime teardown and final bucket purge. The procedure above remains applicable
+to a newly provisioned reproduction, not to the already removed deployment.
 
 ## GitHub interface and CLI references
 

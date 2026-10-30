@@ -20,6 +20,11 @@ See [contracts and state transitions](docs/contracts.md) for payloads, acknowled
 boundaries, idempotency and current propagation/validation limits.
 Repository access is required; documentation does not change repository visibility.
 
+**Lab status:** the author's AWS deployment was removed on 2026-10-30 after
+validation. There is no active hosted demonstration endpoint. Reproduce the lab
+in your own account using the guide; delivery workflows remain disabled after
+closure and must not be re-enabled against the removed deployment.
+
 ## Repositories and responsibilities
 
 | Repository | Responsibility | AWS execution |
@@ -262,8 +267,12 @@ certification or a reproduction of an employer's internal implementation.
 
 Real automatic delivery and synthetic end-to-end smoke passed for all four
 application repositories and for infrastructure changes; the owner also checked
-the resulting transactions manually. Teardown preparation passed unit tests and
-real deletion previews only: no destructive execution is claimed.
+the resulting transactions manually. Final runtime teardown and separate
+owner-operated bootstrap removal completed on 2026-10-30. Both runtime states
+were empty, and post-removal AWS inventory confirmed the reviewed project
+resources absent; the shared GitHub OIDC provider was preserved. See the
+[teardown validation record](docs/final-teardown.md#validation-status) for the
+partial-failure recovery, private backup and verification limits.
 Replaying this guide in a second empty AWS account has not been performed as
 part of documentation work.
 

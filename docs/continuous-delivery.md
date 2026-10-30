@@ -1,4 +1,4 @@
-# Continuous delivery — implementation in progress
+# Continuous delivery — validated lab implementation
 
 ## Required outcome
 
@@ -13,10 +13,15 @@ The service chain has now been validated in all four repositories: automatic
 push, CI/package, publication, central deploy, Lambda verification and synthetic
 smoke, including source-workflow success propagation. Infrastructure-push delivery
 has been validated with a description-only apply and independent successful
-smokes for both stacks. Protected destroy is now prepared, not executed; see
-[final teardown](final-teardown.md) for stage-15 prerequisites and the separate
-optional role. Historical preparation notes below do not
-override this current status.
+smokes for both stacks. Final runtime teardown and separate owner-operated
+bootstrap removal completed on 2026-10-30; see the
+[teardown validation record](final-teardown.md#validation-status).
+The author's deployment no longer exists: application and infrastructure
+delivery workflows remain disabled, the freeze remains enabled, and the four
+temporary dispatch secrets were removed. CI can still validate source without
+recreating AWS resources. Reproduction requires your own first provisioning and
+configuration before enabling delivery. Historical preparation notes below do
+not override this current status.
 
 ## Runtime infrastructure changes after a main push
 
