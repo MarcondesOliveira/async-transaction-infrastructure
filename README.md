@@ -11,6 +11,8 @@ Terraform and central delivery orchestration live here.
 
 **Start here:** [reproduce the lab from scratch](docs/reproduce.md).
 You can also [run a short demonstration](#manual-demonstration) after deployment.
+See [contracts and state transitions](docs/contracts.md) for payloads, acknowledgement
+boundaries, idempotency and current propagation/validation limits.
 Repository access is required; documentation does not change repository visibility.
 
 ## Repositories and responsibilities
